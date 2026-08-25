@@ -1,0 +1,73 @@
+### Only the deliberate disagreements with detekt's defaults live here.
+### Everything else comes from `buildUponDefaultConfig = true`.
+
+build:
+  maxIssues: 0
+
+complexity:
+  LongMethod:
+    # A composable is a declarative tree, not logic. A screen that lays out a
+    # dozen controls is long by nature, and splitting it to satisfy a line
+    # count would only add indirection.
+    ignoreAnnotated: ['Composable']
+  LongParameterList:
+    # A long list of *defaulted* parameters is a builder. It costs the caller
+    # nothing, because the caller passes only the two it cares about.
+    ignoreDefaultParameters: true
+    ignoreAnnotated: ['Composable']
+    functionThreshold: 7
+  CyclomaticComplexMethod:
+    ignoreAnnotated: ['Composable']
+  TooManyFunctions:
+    # ChecklistRepository is a deliberate facade: the one place the rest of the
+    # app talks to, rather than three stores leaking outward.
+    thresholdInClasses: 20
+    ignoreAnnotatedFunctions: ['Composable']
+  ComplexCondition:
+    threshold: 5
+
+naming:
+  FunctionNaming:
+    # Composables are PascalCase by convention.
+    ignoreAnnotated: ['Composable']
+  MatchingDeclarationName:
+    # ItemsScreen.kt exists for `ItemsScreen()`, but detekt counts only classes,
+    # so it sees the `ItemsActions` holder beside it and calls the file
+    # misnamed. Naming the file after the composable is the clearer convention.
+    active: false
+
+style:
+  MagicNumber:
+    # Layout constants (dp, slider bounds, alpha) read better inline than as a
+    # name defined forty lines away.
+    ignoreAnnotated: ['Composable']
+    ignorePropertyDeclaration: true
+    ignoreCompanionObjectPropertyDeclaration: true
+  MaxLineLength:
+    maxLineLength: 120
+  ReturnCount:
+    # Guard clauses are the readable shape for a parser: each one names a way
+    # the input can be wrong. Collapsing them into nested ifs would hide that.
+    max: 8
+    excludeGuardClauses: true
+  ForbiddenComment:
+    comments:
+      - reason: 'Track it in TODO.md rather than hiding it in the source.'
+        value: 'FIXME:'
+
+formatting:
+  MaximumLineLength:
+    maxLineLength: 120
+  AnnotationOnSeparateLine:
+    # An annotation on a *type argument*, as in `Set<@Serializable(...) DayOfWeek>`,
+    # cannot be moved to its own line. ktlint reports it anyway.
+    active: false
+  ArgumentListWrapping:
+    # Fights tables of test data, where one case per line is the whole point.
+    active: false
+
+exceptions:
+  TooGenericExceptionCaught:
+    active: false
+  SwallowedException:
+    active: false
