@@ -248,14 +248,15 @@ write_local_properties() {
     ok "wrote local.properties"
   fi
 
-  if ! grep -q '^gtfsr.apiKey=' "$file" 2>/dev/null; then
-    printf 'gtfsr.apiKey=\n' >> "$file"
-    warn "gtfsr.apiKey is empty in local.properties - sign up and subscribe at
-     https://developer.nationaltransport.ie/signup, then paste your key in
-     (realtime arrivals will not work until you do; the key can take ~15 min to activate)"
+  if ! grep -q '^server.baseUrl=' "$file" 2>/dev/null; then
+    printf 'server.baseUrl=\n' >> "$file"
+    warn "server.baseUrl is empty in local.properties - point it at your running arrivals
+     server (e.g. http://10.0.2.2:8080/ for a local server from the emulator, or your
+     Cloudflare Tunnel https URL). See ./scripts/run-server.sh and README.md."
   fi
-  if ! grep -q '^gtfsr.apiKey2=' "$file" 2>/dev/null; then
-    printf 'gtfsr.apiKey2=\n' >> "$file"
+  if ! grep -q '^server.apiKey=' "$file" 2>/dev/null; then
+    printf 'server.apiKey=\n' >> "$file"
+    warn "server.apiKey is empty in local.properties - must match SERVER_API_KEY in server.env"
   fi
 }
 

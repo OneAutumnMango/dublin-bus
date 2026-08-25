@@ -14,8 +14,8 @@ android {
         if (localProperties.exists()) {
             localProperties.inputStream().use { props.load(it) }
         }
-        buildConfigField("String", "GTFSR_API_KEY", "\"${props.getProperty("gtfsr.apiKey", "")}\"")
-        buildConfigField("String", "GTFSR_API_KEY_SECONDARY", "\"${props.getProperty("gtfsr.apiKey2", "")}\"")
+        buildConfigField("String", "SERVER_BASE_URL", "\"${props.getProperty("server.baseUrl", "")}\"")
+        buildConfigField("String", "SERVER_API_KEY", "\"${props.getProperty("server.apiKey", "")}\"")
     }
     buildFeatures {
         buildConfig = true

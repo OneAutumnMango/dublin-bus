@@ -8,6 +8,7 @@
         android:name=".BusTrackerApp"
         android:allowBackup="true"
         android:label="Dublin Bus Tracker"
+        android:networkSecurityConfig="@xml/network_security_config"
         android:theme="@style/Theme.DublinBusTracker">
 
         <activity

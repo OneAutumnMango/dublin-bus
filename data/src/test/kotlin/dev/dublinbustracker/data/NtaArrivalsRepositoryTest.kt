@@ -12,7 +12,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-class ArrivalsRepositoryTest {
+class NtaArrivalsRepositoryTest {
     private val staticData = GtfsStaticData.parse(
         """{"stops":[],"routes":{"r1":"15"},"trips":{"t1":{"routeId":"r1","headsign":"Clongriffin"}}}""",
     )
@@ -24,7 +24,7 @@ class ArrivalsRepositoryTest {
         server.start()
 
         val client = RealtimeGtfsClient(apiKey = "test-key", feedUrl = server.url("/").toString())
-        val repository = ArrivalsRepository(client, staticData, nowEpochSeconds = { 1_000L })
+        val repository = NtaArrivalsRepository(client, staticData, nowEpochSeconds = { 1_000L })
 
         val arrivals = repository.arrivalsForStop("s1")
 
@@ -38,11 +38,22 @@ class ArrivalsRepositoryTest {
     }
 
     @Test
+    fun `arrivalsFromFeed maps a pre-fetched feed without any network call, for reuse across stops`() {
+        val repository = NtaArrivalsRepository(RealtimeGtfsClient(apiKey = "unused"), staticData)
+
+        val stopOne = repository.arrivalsFromFeed(feedWithTwoArrivals(), "s1", now = 1_000L)
+        val otherStop = repository.arrivalsFromFeed(feedWithTwoArrivals(), "other-stop", now = 1_000L)
+
+        assertEquals(2, stopOne.size)
+        assertEquals(1, otherStop.size)
+    }
+
+    @Test
     fun `poll interval is 60s with one key, 30s when two keys are configured`() {
-        val single = ArrivalsRepository(RealtimeGtfsClient(apiKey = "key-1"), staticData)
+        val single = NtaArrivalsRepository(RealtimeGtfsClient(apiKey = "key-1"), staticData)
         assertEquals(60_000L, single.pollIntervalMs)
 
-        val dual = ArrivalsRepository(RealtimeGtfsClient(listOf("key-1", "key-2")), staticData)
+        val dual = NtaArrivalsRepository(RealtimeGtfsClient(listOf("key-1", "key-2")), staticData)
         assertEquals(30_000L, dual.pollIntervalMs)
     }
 

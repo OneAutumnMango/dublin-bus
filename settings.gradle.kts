@@ -27,3 +27,4 @@ rootProject.name = "dublin-bus-tracker"
 include(":core")
 include(":data")
 include(":app")
+include(":server")
