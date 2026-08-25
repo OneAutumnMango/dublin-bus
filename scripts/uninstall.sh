@@ -112,7 +112,6 @@ main() {
     "$REPO_ROOT/app/build"
     "$REPO_ROOT/core/build"
     "$REPO_ROOT/data/build"
-    "$REPO_ROOT/server/build"
     "$REPO_ROOT/build-logic/convention/build"
     "$REPO_ROOT/.gradle"
     "$REPO_ROOT/local.properties"

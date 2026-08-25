@@ -9,7 +9,7 @@ import kotlin.test.assertEquals
 
 class RemoteArrivalsRepositoryTest {
     @Test
-    fun `requests arrivals for the stop and maps the response, sending the api key`() = runTest {
+    fun `requests arrivals for the stop and maps the response, sending configured headers`() = runTest {
         val server = MockWebServer()
         server.enqueue(
             MockResponse().setBody(
@@ -18,7 +18,10 @@ class RemoteArrivalsRepositoryTest {
         )
         server.start()
 
-        val repository = RemoteArrivalsRepository(baseUrl = server.url("/").toString(), apiKey = "secret")
+        val repository = RemoteArrivalsRepository(
+            baseUrl = server.url("/").toString(),
+            headers = mapOf("X-Api-Key" to "secret", "CF-Access-Client-Id" to "client-id"),
+        )
         val arrivals = repository.arrivalsForStop("s1")
 
         assertEquals(1, arrivals.size)
@@ -27,8 +30,20 @@ class RemoteArrivalsRepositoryTest {
 
         val request: RecordedRequest = server.takeRequest()
         assertEquals("secret", request.getHeader("X-Api-Key"))
+        assertEquals("client-id", request.getHeader("CF-Access-Client-Id"))
         assertEquals("/arrivals?stopId=s1", request.path)
 
         server.shutdown()
+    }
+
+    @Test
+    fun `parseHeaders splits name-value pairs on comma then first equals`() {
+        val headers = parseHeaders("X-Api-Key=secret,CF-Access-Client-Id=abc=def")
+        assertEquals(mapOf("X-Api-Key" to "secret", "CF-Access-Client-Id" to "abc=def"), headers)
+    }
+
+    @Test
+    fun `parseHeaders on a blank string is an empty map`() {
+        assertEquals(emptyMap(), parseHeaders(""))
     }
 }

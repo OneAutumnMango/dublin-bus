@@ -5,5 +5,4 @@ plugins {
 dependencies {
     kover(projects.core)
     kover(projects.data)
-    kover(projects.server)
 }

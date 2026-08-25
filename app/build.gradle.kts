@@ -14,8 +14,9 @@ android {
         if (localProperties.exists()) {
             localProperties.inputStream().use { props.load(it) }
         }
-        buildConfigField("String", "SERVER_BASE_URL", "\"${props.getProperty("server.baseUrl", "")}\"")
-        buildConfigField("String", "SERVER_API_KEY", "\"${props.getProperty("server.apiKey", "")}\"")
+        fun escaped(value: String) = value.replace("\\", "\\\\").replace("\"", "\\\"")
+        buildConfigField("String", "SERVER_BASE_URL", "\"${escaped(props.getProperty("server.baseUrl", ""))}\"")
+        buildConfigField("String", "SERVER_HEADERS", "\"${escaped(props.getProperty("server.headers", ""))}\"")
     }
     buildFeatures {
         buildConfig = true

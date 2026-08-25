@@ -251,12 +251,14 @@ write_local_properties() {
   if ! grep -q '^server.baseUrl=' "$file" 2>/dev/null; then
     printf 'server.baseUrl=\n' >> "$file"
     warn "server.baseUrl is empty in local.properties - point it at your running arrivals
-     server (e.g. http://10.0.2.2:8080/ for a local server from the emulator, or your
-     Cloudflare Tunnel https URL). See ./scripts/run-server.sh and README.md."
+     server (e.g. http://10.0.2.2:8080/ for a local server from the emulator, or however
+     you expose it). See ../dublin-bus-server/README.md."
   fi
-  if ! grep -q '^server.apiKey=' "$file" 2>/dev/null; then
-    printf 'server.apiKey=\n' >> "$file"
-    warn "server.apiKey is empty in local.properties - must match SERVER_API_KEY in server.env"
+  if ! grep -q '^server.headers=' "$file" 2>/dev/null; then
+    printf 'server.headers=\n' >> "$file"
+    warn "server.headers is empty in local.properties - comma-separated Name=Value pairs sent
+     as request headers to the server, e.g. X-Api-Key=<value matching the server's
+     SERVER_API_KEY>, plus anything a proxy in front of it needs."
   fi
 }
 

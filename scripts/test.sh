@@ -55,8 +55,8 @@ done
 cd "$REPO_ROOT"
 
 gradle_args=(--console=plain)
-result_roots=(core data server)
-test_tasks=(:core:test :data:test :server:test)
+result_roots=(core data)
+test_tasks=(:core:test :data:test)
 
 if (( ! CORE_ONLY )); then
   [[ -f local.properties ]] ||
