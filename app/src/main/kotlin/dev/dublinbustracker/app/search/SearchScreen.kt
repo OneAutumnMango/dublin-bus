@@ -18,16 +18,19 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import dev.dublinbustracker.app.favourites.FavouriteStarButton
 import dev.dublinbustracker.core.Stop
+import dev.dublinbustracker.data.FavouritesRepository
 import dev.dublinbustracker.data.StopRepository
 
 @Composable
-fun SearchScreen(stopRepository: StopRepository, onStopSelected: (Stop) -> Unit) {
+fun SearchScreen(stopRepository: StopRepository, favouritesRepository: FavouritesRepository, onStopSelected: (Stop) -> Unit) {
     val viewModel = viewModel<SearchViewModel>(
         factory = viewModelFactory { initializer { SearchViewModel(stopRepository) } },
     )
     val query by viewModel.query.collectAsState()
     val results by viewModel.results.collectAsState()
+    val favouriteIds by favouritesRepository.favouriteIds.collectAsState()
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         OutlinedTextField(
@@ -42,6 +45,12 @@ fun SearchScreen(stopRepository: StopRepository, onStopSelected: (Stop) -> Unit)
                 ListItem(
                     headlineContent = { Text(stop.name) },
                     supportingContent = { Text("Stop ${stop.code}") },
+                    trailingContent = {
+                        FavouriteStarButton(
+                            isFavourite = stop.id in favouriteIds,
+                            onToggle = { favouritesRepository.toggle(stop.id) },
+                        )
+                    },
                     modifier = Modifier.clickable { onStopSelected(stop) },
                 )
             }

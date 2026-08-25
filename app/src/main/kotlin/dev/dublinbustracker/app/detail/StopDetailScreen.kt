@@ -23,20 +23,28 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import dev.dublinbustracker.app.favourites.FavouriteStarButton
 import dev.dublinbustracker.core.Stop
 import dev.dublinbustracker.data.ArrivalsRepository
+import dev.dublinbustracker.data.FavouritesRepository
 import kotlinx.coroutines.delay
 
 // The NTA key's rate limit resets every 60s; never poll faster than that.
 private const val REFRESH_INTERVAL_MS = 60_000L
 
 @Composable
-fun StopDetailScreen(stop: Stop, arrivalsRepository: ArrivalsRepository, onBack: () -> Unit) {
+fun StopDetailScreen(
+    stop: Stop,
+    arrivalsRepository: ArrivalsRepository,
+    favouritesRepository: FavouritesRepository,
+    onBack: () -> Unit,
+) {
     val viewModel = viewModel<StopDetailViewModel>(
         key = stop.id,
         factory = viewModelFactory { initializer { StopDetailViewModel(stop.id, arrivalsRepository) } },
     )
     val uiState by viewModel.uiState.collectAsState()
+    val favouriteIds by favouritesRepository.favouriteIds.collectAsState()
 
     LaunchedEffect(stop.id) {
         while (true) {
@@ -51,7 +59,13 @@ fun StopDetailScreen(stop: Stop, arrivalsRepository: ArrivalsRepository, onBack:
                 Text(stop.name, style = MaterialTheme.typography.titleLarge)
                 Text("Stop ${stop.code}")
             }
-            TextButton(onClick = onBack) { Text("Back") }
+            Row {
+                FavouriteStarButton(
+                    isFavourite = stop.id in favouriteIds,
+                    onToggle = { favouritesRepository.toggle(stop.id) },
+                )
+                TextButton(onClick = onBack) { Text("Back") }
+            }
         }
         Button(onClick = viewModel::refresh) { Text("Refresh") }
 

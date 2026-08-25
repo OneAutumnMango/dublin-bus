@@ -2,6 +2,7 @@ package dev.dublinbustracker.app
 
 import android.app.Application
 import dev.dublinbustracker.data.ArrivalsRepository
+import dev.dublinbustracker.data.FavouritesRepository
 import dev.dublinbustracker.data.GtfsStaticData
 import dev.dublinbustracker.data.RealtimeGtfsClient
 import dev.dublinbustracker.data.StopRepository
@@ -14,6 +15,10 @@ class AppContainer(application: Application) {
     }
 
     val stopRepository: StopRepository by lazy { StopRepository(gtfsStaticData) }
+
+    val favouritesRepository: FavouritesRepository by lazy {
+        FavouritesRepository(SharedPreferencesFavouritesStorage(application))
+    }
 
     val arrivalsRepository: ArrivalsRepository by lazy {
         ArrivalsRepository(RealtimeGtfsClient(apiKey = BuildConfig.GTFSR_API_KEY), gtfsStaticData)

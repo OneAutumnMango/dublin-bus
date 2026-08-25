@@ -17,6 +17,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import dev.dublinbustracker.app.detail.StopDetailScreen
+import dev.dublinbustracker.app.favourites.FavouritesScreen
 import dev.dublinbustracker.app.map.MapScreen
 import dev.dublinbustracker.app.search.SearchScreen
 import dev.dublinbustracker.core.Stop
@@ -36,7 +37,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private enum class AppTab(val label: String) { SEARCH("Search"), MAP("Map") }
+private enum class AppTab(val label: String) { SEARCH("Search"), MAP("Map"), FAVOURITES("Favourites") }
 
 @Composable
 private fun AppRoot(container: AppContainer) {
@@ -48,6 +49,7 @@ private fun AppRoot(container: AppContainer) {
         stop != null -> StopDetailScreen(
             stop = stop,
             arrivalsRepository = container.arrivalsRepository,
+            favouritesRepository = container.favouritesRepository,
             onBack = { selectedStop = null },
         )
         else -> Column(modifier = Modifier.fillMaxSize()) {
@@ -57,8 +59,17 @@ private fun AppRoot(container: AppContainer) {
                 }
             }
             when (tab) {
-                AppTab.SEARCH -> SearchScreen(container.stopRepository, onStopSelected = { selectedStop = it })
+                AppTab.SEARCH -> SearchScreen(
+                    container.stopRepository,
+                    container.favouritesRepository,
+                    onStopSelected = { selectedStop = it },
+                )
                 AppTab.MAP -> MapScreen(container.stopRepository, onStopSelected = { selectedStop = it })
+                AppTab.FAVOURITES -> FavouritesScreen(
+                    container.stopRepository,
+                    container.favouritesRepository,
+                    onStopSelected = { selectedStop = it },
+                )
             }
         }
     }
