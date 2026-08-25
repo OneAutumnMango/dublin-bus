@@ -37,6 +37,15 @@ class ArrivalsRepositoryTest {
         server.shutdown()
     }
 
+    @Test
+    fun `poll interval is 60s with one key, 30s when two keys are configured`() {
+        val single = ArrivalsRepository(RealtimeGtfsClient(apiKey = "key-1"), staticData)
+        assertEquals(60_000L, single.pollIntervalMs)
+
+        val dual = ArrivalsRepository(RealtimeGtfsClient(listOf("key-1", "key-2")), staticData)
+        assertEquals(30_000L, dual.pollIntervalMs)
+    }
+
     private fun feedWithTwoArrivals(): FeedMessage {
         fun stopTimeUpdate(stopId: String, arrivalEpoch: Long) =
             TripUpdate.StopTimeUpdate.newBuilder()

@@ -29,9 +29,6 @@ import dev.dublinbustracker.data.ArrivalsRepository
 import dev.dublinbustracker.data.FavouritesRepository
 import kotlinx.coroutines.delay
 
-// The NTA key's rate limit resets every 60s; never poll faster than that.
-private const val REFRESH_INTERVAL_MS = 60_000L
-
 @Composable
 fun StopDetailScreen(
     stop: Stop,
@@ -48,7 +45,7 @@ fun StopDetailScreen(
 
     LaunchedEffect(stop.id) {
         while (true) {
-            delay(REFRESH_INTERVAL_MS)
+            delay(arrivalsRepository.pollIntervalMs)
             viewModel.refresh()
         }
     }

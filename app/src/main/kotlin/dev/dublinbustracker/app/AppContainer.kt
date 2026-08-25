@@ -21,6 +21,7 @@ class AppContainer(application: Application) {
     }
 
     val arrivalsRepository: ArrivalsRepository by lazy {
-        ArrivalsRepository(RealtimeGtfsClient(apiKey = BuildConfig.GTFSR_API_KEY), gtfsStaticData)
+        val keys = listOf(BuildConfig.GTFSR_API_KEY, BuildConfig.GTFSR_API_KEY_SECONDARY)
+        ArrivalsRepository(RealtimeGtfsClient(keys), gtfsStaticData)
     }
 }

@@ -254,6 +254,9 @@ write_local_properties() {
      https://developer.nationaltransport.ie/signup, then paste your key in
      (realtime arrivals will not work until you do; the key can take ~15 min to activate)"
   fi
+  if ! grep -q '^gtfsr.apiKey2=' "$file" 2>/dev/null; then
+    printf 'gtfsr.apiKey2=\n' >> "$file"
+  fi
 }
 
 write_env_file() {

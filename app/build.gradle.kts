@@ -15,6 +15,7 @@ android {
             localProperties.inputStream().use { props.load(it) }
         }
         buildConfigField("String", "GTFSR_API_KEY", "\"${props.getProperty("gtfsr.apiKey", "")}\"")
+        buildConfigField("String", "GTFSR_API_KEY_SECONDARY", "\"${props.getProperty("gtfsr.apiKey2", "")}\"")
     }
     buildFeatures {
         buildConfig = true
