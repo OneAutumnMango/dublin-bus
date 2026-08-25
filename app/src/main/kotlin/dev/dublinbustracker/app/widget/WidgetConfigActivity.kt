@@ -33,7 +33,7 @@ class WidgetConfigActivity : ComponentActivity() {
         setContent {
             MaterialTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    SearchScreen(container.stopRepository, container.favouritesRepository, onStopSelected = ::onStopChosen)
+                    SearchScreen(container.apiClient, container.favouritesRepository, onStopSelected = ::onStopChosen)
                 }
             }
         }

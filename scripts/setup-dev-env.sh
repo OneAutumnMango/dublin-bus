@@ -305,7 +305,6 @@ main() {
 ${C_OK}Setup complete.${C_RESET}
 
   source scripts/env.sh          # adds adb/sdkmanager to PATH for this shell
-  ./scripts/fetch-gtfs-data.sh    # download and filter the static GTFS stop data
   ./gradlew :core:test           # fast pure-JVM domain tests, no Android needed
   ./gradlew :app:testDebugUnitTest
 

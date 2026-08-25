@@ -3,7 +3,7 @@ package dev.dublinbustracker.app.detail
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.dublinbustracker.core.Arrival
-import dev.dublinbustracker.data.ArrivalsRepository
+import dev.dublinbustracker.data.TransitApiClient
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -15,22 +15,35 @@ sealed interface ArrivalsUiState {
     data class Error(val message: String) : ArrivalsUiState
 }
 
-class StopDetailViewModel(private val stopId: String, private val arrivalsRepository: ArrivalsRepository) : ViewModel() {
+/** The server refreshes upstream at most every 30-60s, so polling faster than this gains nothing. */
+const val ARRIVALS_REFRESH_INTERVAL_MS = 30_000L
+
+class StopDetailViewModel(
+    private val stopId: String,
+    private val apiClient: TransitApiClient,
+) : ViewModel() {
     private val _uiState = MutableStateFlow<ArrivalsUiState>(ArrivalsUiState.Loading)
     val uiState: StateFlow<ArrivalsUiState> = _uiState.asStateFlow()
 
+    private val _routeFilter = MutableStateFlow<String?>(null)
+    val routeFilter: StateFlow<String?> = _routeFilter.asStateFlow()
+
     init {
+        refresh()
+    }
+
+    fun setRouteFilter(route: String?) {
+        _routeFilter.value = route
         refresh()
     }
 
     fun refresh() {
         viewModelScope.launch {
             _uiState.value = ArrivalsUiState.Loading
-            _uiState.value = try {
-                ArrivalsUiState.Loaded(arrivalsRepository.arrivalsForStop(stopId))
-            } catch (e: Exception) {
-                ArrivalsUiState.Error(e.message ?: "Failed to load arrivals")
-            }
+            _uiState.value = runCatching { apiClient.arrivals(stopId, _routeFilter.value) }.fold(
+                onSuccess = { ArrivalsUiState.Loaded(it) },
+                onFailure = { ArrivalsUiState.Error(it.message ?: "Failed to load arrivals") },
+            )
         }
     }
 }

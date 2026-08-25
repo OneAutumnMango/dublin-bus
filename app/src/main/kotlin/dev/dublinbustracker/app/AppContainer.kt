@@ -1,28 +1,30 @@
 package dev.dublinbustracker.app
 
 import android.app.Application
-import dev.dublinbustracker.data.ArrivalsRepository
 import dev.dublinbustracker.data.FavouritesRepository
-import dev.dublinbustracker.data.GtfsStaticData
-import dev.dublinbustracker.data.RemoteArrivalsRepository
-import dev.dublinbustracker.data.StopRepository
-import dev.dublinbustracker.data.parseHeaders
+import dev.dublinbustracker.data.ServerSettings
+import dev.dublinbustracker.data.ServerSettingsRepository
+import dev.dublinbustracker.data.TransitApiClient
 
 /** Manual DI container: the app is small enough that a dependency-injection framework isn't worth it. */
 class AppContainer(application: Application) {
-    private val gtfsStaticData: GtfsStaticData by lazy {
-        val json = application.assets.open("gtfs_static.json").bufferedReader().use { it.readText() }
-        GtfsStaticData.parse(json)
-    }
 
-    val stopRepository: StopRepository by lazy { StopRepository(gtfsStaticData) }
+    // local.properties only seeds the first run; anything saved in Settings wins after that.
+    private val defaultSettings = ServerSettings(
+        baseUrl = ServerSettings.normaliseBaseUrl(BuildConfig.SERVER_BASE_URL),
+        headers = ServerSettings.parseHeaderSpec(BuildConfig.SERVER_HEADERS),
+    )
+
+    val settingsRepository: ServerSettingsRepository by lazy {
+        ServerSettingsRepository(SharedPreferencesServerSettingsStorage(application), defaultSettings)
+    }
 
     val favouritesRepository: FavouritesRepository by lazy {
         FavouritesRepository(SharedPreferencesFavouritesStorage(application))
     }
 
-    // The server holds the NTA key(s) and its own rate-limited poll loop; the app just asks it.
-    val arrivalsRepository: ArrivalsRepository by lazy {
-        RemoteArrivalsRepository(baseUrl = BuildConfig.SERVER_BASE_URL, headers = parseHeaders(BuildConfig.SERVER_HEADERS))
+    /** The server holds the NTA keys and does the rate-limited polling; the app just asks it. */
+    val apiClient: TransitApiClient by lazy {
+        TransitApiClient(settingsProvider = { settingsRepository.current() })
     }
 }

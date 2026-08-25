@@ -6,7 +6,7 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SecondaryTabRow
+import androidx.compose.material3.SecondaryScrollableTabRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
@@ -16,10 +16,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import dev.dublinbustracker.app.detail.StopDetailScreen
 import dev.dublinbustracker.app.favourites.FavouritesScreen
 import dev.dublinbustracker.app.map.MapScreen
 import dev.dublinbustracker.app.search.SearchScreen
+import dev.dublinbustracker.app.settings.SettingsScreen
 import dev.dublinbustracker.core.Stop
 
 class MainActivity : ComponentActivity() {
@@ -37,7 +39,12 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private enum class AppTab(val label: String) { SEARCH("Search"), MAP("Map"), FAVOURITES("Favourites") }
+private enum class AppTab(val label: String) {
+    SEARCH("Search"),
+    MAP("Map"),
+    FAVOURITES("Favourites"),
+    SETTINGS("Settings"),
+}
 
 @Composable
 private fun AppRoot(container: AppContainer) {
@@ -48,28 +55,29 @@ private fun AppRoot(container: AppContainer) {
     when {
         stop != null -> StopDetailScreen(
             stop = stop,
-            arrivalsRepository = container.arrivalsRepository,
+            apiClient = container.apiClient,
             favouritesRepository = container.favouritesRepository,
             onBack = { selectedStop = null },
         )
         else -> Column(modifier = Modifier.fillMaxSize()) {
-            SecondaryTabRow(selectedTabIndex = tab.ordinal) {
-                AppTab.entries.forEach { t ->
-                    Tab(selected = tab == t, onClick = { tab = t }, text = { Text(t.label) })
+            SecondaryScrollableTabRow(selectedTabIndex = tab.ordinal, edgePadding = 0.dp) {
+                AppTab.entries.forEach { entry ->
+                    Tab(selected = tab == entry, onClick = { tab = entry }, text = { Text(entry.label) })
                 }
             }
             when (tab) {
                 AppTab.SEARCH -> SearchScreen(
-                    container.stopRepository,
+                    container.apiClient,
                     container.favouritesRepository,
                     onStopSelected = { selectedStop = it },
                 )
-                AppTab.MAP -> MapScreen(container.stopRepository, onStopSelected = { selectedStop = it })
+                AppTab.MAP -> MapScreen(container.apiClient, onStopSelected = { selectedStop = it })
                 AppTab.FAVOURITES -> FavouritesScreen(
-                    container.stopRepository,
+                    container.apiClient,
                     container.favouritesRepository,
                     onStopSelected = { selectedStop = it },
                 )
+                AppTab.SETTINGS -> SettingsScreen(container.settingsRepository, container.apiClient)
             }
         }
     }

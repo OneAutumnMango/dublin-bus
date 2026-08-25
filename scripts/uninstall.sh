@@ -116,7 +116,6 @@ main() {
     "$REPO_ROOT/.gradle"
     "$REPO_ROOT/local.properties"
     "$REPO_ROOT/scripts/env.sh"
-    "$REPO_ROOT/data/src/main/assets/gtfs_static.json"
   )
   local found=0 t
   for t in "${targets[@]}"; do

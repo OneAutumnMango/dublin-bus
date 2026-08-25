@@ -6,39 +6,52 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.dublinbustracker.core.Stop
 import dev.dublinbustracker.data.FavouritesRepository
-import dev.dublinbustracker.data.StopRepository
+import dev.dublinbustracker.data.TransitApiClient
 
 @Composable
 fun FavouritesScreen(
-    stopRepository: StopRepository,
+    apiClient: TransitApiClient,
     favouritesRepository: FavouritesRepository,
     onStopSelected: (Stop) -> Unit,
 ) {
-    val favouriteIds by favouritesRepository.favouriteIds.collectAsState()
-    val favouriteStops = remember(favouriteIds) {
-        favouriteIds.mapNotNull { stopRepository.byId(it) }.sortedBy { it.name }
+    val favourites by favouritesRepository.favourites.collectAsState()
+
+    // Entries migrated from the old id-only format have no name until the server fills them in.
+    LaunchedEffect(favourites) {
+        favourites.filter { it.needsDetails }.forEach { favourite ->
+            runCatching { apiClient.stop(favourite.id) }
+                .onSuccess { favouritesRepository.updateDetails(it) }
+        }
     }
 
-    if (favouriteStops.isEmpty()) {
-        Text("No favourites yet - star a stop from Search or its detail page", modifier = Modifier.padding(16.dp))
+    if (favourites.isEmpty()) {
+        Text(
+            "No favourites yet - tap the star on a stop to add it.",
+            modifier = Modifier.padding(16.dp),
+            style = MaterialTheme.typography.bodyMedium,
+        )
         return
     }
 
     LazyColumn(modifier = Modifier.fillMaxSize()) {
-        items(favouriteStops, key = { it.id }) { stop ->
+        items(favourites, key = { it.id }) { favourite ->
             ListItem(
-                headlineContent = { Text(stop.name) },
-                supportingContent = { Text("Stop ${stop.code}") },
-                modifier = Modifier.clickable { onStopSelected(stop) },
+                headlineContent = { Text(favourite.name.ifBlank { favourite.id }) },
+                supportingContent = { Text("Stop ${favourite.code.ifBlank { "-" }}") },
+                trailingContent = {
+                    FavouriteStarButton(isFavourite = true, onToggle = { favouritesRepository.remove(favourite.id) })
+                },
+                modifier = Modifier.clickable { onStopSelected(favourite.toStop()) },
             )
         }
     }

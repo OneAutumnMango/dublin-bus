@@ -26,33 +26,37 @@ class BusStopWidget : GlanceAppWidget() {
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val appWidgetId = GlanceAppWidgetManager(context).getAppWidgetId(id)
         val container = (context.applicationContext as BusTrackerApp).container
-        val stop = WidgetStopStore(context).stopIdFor(appWidgetId)?.let { container.stopRepository.byId(it) }
-        val arrivals = stop?.let {
-            runCatching { container.arrivalsRepository.arrivalsForStop(it.id) }.getOrElse { emptyList() }
+        val stopId = WidgetStopStore(context).stopIdFor(appWidgetId)
+
+        val stop = stopId?.let { runCatching { container.apiClient.stop(it) }.getOrNull() }
+        val arrivals = stopId?.let {
+            runCatching { container.apiClient.arrivals(it, limit = 3) }.getOrElse { emptyList() }
         }.orEmpty()
 
-        provideContent { WidgetContent(stop, arrivals) }
+        provideContent { WidgetContent(stop, arrivals, unreachable = stopId != null && stop == null) }
     }
 }
 
 @Composable
-private fun WidgetContent(stop: Stop?, arrivals: List<Arrival>) {
+private fun WidgetContent(stop: Stop?, arrivals: List<Arrival>, unreachable: Boolean) {
     Column(
         modifier = GlanceModifier.fillMaxSize().padding(8.dp)
             .clickable(actionStartActivity<MainActivity>()),
     ) {
-        if (stop == null) {
-            Text("Tap to add this widget, then choose a stop")
-        } else {
-            Text(stop.name)
-            if (arrivals.isEmpty()) {
-                Text("No upcoming arrivals")
-            } else {
-                arrivals.take(3).forEach { arrival ->
-                    Text("${arrival.routeShortName} ${arrival.destination}: ${arrival.dueMinutes}m")
+        when {
+            stop == null && !unreachable -> Text("Tap to add this widget, then choose a stop")
+            stop == null -> Text("Can't reach the server - check Settings")
+            else -> {
+                Text(stop.name)
+                if (arrivals.isEmpty()) {
+                    Text("No upcoming arrivals")
+                } else {
+                    arrivals.take(3).forEach { arrival ->
+                        Text("${arrival.routeShortName} ${arrival.destination}: ${arrival.dueMinutes}m")
+                    }
                 }
+                Text("Refresh", modifier = GlanceModifier.clickable(actionRunCallback<RefreshWidgetAction>()))
             }
-            Text("Refresh", modifier = GlanceModifier.clickable(actionRunCallback<RefreshWidgetAction>()))
         }
     }
 }
