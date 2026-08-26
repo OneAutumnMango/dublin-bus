@@ -42,8 +42,10 @@ class WidgetConfigActivity : ComponentActivity() {
     private fun onStopChosen(stop: Stop) {
         WidgetStopStore(this).save(appWidgetId, stop.id)
         lifecycleScope.launch {
-            val glanceId = GlanceAppWidgetManager(this@WidgetConfigActivity).getGlanceIdBy(appWidgetId)
-            BusStopWidget().update(this@WidgetConfigActivity, glanceId)
+            runCatching {
+                val glanceId = GlanceAppWidgetManager(this@WidgetConfigActivity).getGlanceIdBy(appWidgetId)
+                BusStopWidget().update(this@WidgetConfigActivity, glanceId)
+            }
         }
         setResult(RESULT_OK, Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId))
         finish()

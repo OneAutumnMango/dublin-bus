@@ -24,13 +24,13 @@ import dev.dublinbustracker.core.Stop
 
 class BusStopWidget : GlanceAppWidget() {
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val appWidgetId = GlanceAppWidgetManager(context).getAppWidgetId(id)
-        val container = (context.applicationContext as BusTrackerApp).container
-        val stopId = WidgetStopStore(context).stopIdFor(appWidgetId)
+        val appWidgetId = runCatching { GlanceAppWidgetManager(context).getAppWidgetId(id) }.getOrNull()
+        val container = (context.applicationContext as? BusTrackerApp)?.container
+        val stopId = appWidgetId?.let { WidgetStopStore(context).stopIdFor(it) }
 
-        val stop = stopId?.let { runCatching { container.apiClient.stop(it) }.getOrNull() }
-        val arrivals = stopId?.let {
-            runCatching { container.apiClient.arrivals(it, limit = 3) }.getOrElse { emptyList() }
+        val stop = stopId?.let { idStr -> runCatching { container?.apiClient?.stop(idStr) }.getOrNull() }
+        val arrivals = stopId?.let { idStr ->
+            runCatching { container?.apiClient?.arrivals(idStr, limit = 3) }.getOrElse { emptyList() }
         }.orEmpty()
 
         provideContent { WidgetContent(stop, arrivals, unreachable = stopId != null && stop == null) }
