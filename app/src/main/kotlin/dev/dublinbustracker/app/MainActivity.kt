@@ -5,6 +5,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SecondaryScrollableTabRow
 import androidx.compose.material3.Surface
@@ -31,7 +32,11 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             MaterialTheme {
-                Surface(modifier = Modifier.fillMaxSize()) {
+                // Android 15+ (targetSdk 36 here) enforces edge-to-edge with no opt-out, so
+                // content draws under the status/nav bars unless padded for them explicitly -
+                // without this, the top row of every screen (back button, favourite star, tabs)
+                // sits under the status bar and is unreachable by touch.
+                Surface(modifier = Modifier.fillMaxSize().safeDrawingPadding()) {
                     AppRoot(container)
                 }
             }
