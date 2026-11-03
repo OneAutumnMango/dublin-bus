@@ -68,8 +68,8 @@ fun SettingsScreen(settingsRepository: ServerSettingsRepository, apiClient: Tran
 
         Text("Request headers", style = MaterialTheme.typography.titleMedium)
         Text(
-            "Sent with every request. Use X-Api-Key for the server's own key, plus anything a " +
-                "proxy in front of it needs.",
+            "Sent with every request. The server itself has no auth of its own - this is for " +
+                "whatever sits in front of it, e.g. a reverse proxy's auth header.",
             style = MaterialTheme.typography.bodySmall,
         )
 
