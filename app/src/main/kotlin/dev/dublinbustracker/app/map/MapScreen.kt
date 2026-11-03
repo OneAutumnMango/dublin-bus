@@ -1,5 +1,6 @@
 package dev.dublinbustracker.app.map
 
+import android.graphics.Point
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -36,6 +37,10 @@ import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
 
 private val DUBLIN_CITY_CENTRE = GeoPoint(53.3498, -6.2603)
+
+// Stops at city-wide zoom otherwise render as 100+ overlapping pins. Markers whose screen
+// positions land within this many pixels of each other are merged into one numbered pin.
+private const val STOP_CLUSTER_RADIUS_PX = 60
 
 @Composable
 fun MapScreen(apiClient: TransitApiClient, onStopSelected: (Stop) -> Unit) {
@@ -112,16 +117,32 @@ fun MapScreen(apiClient: TransitApiClient, onStopSelected: (Stop) -> Unit) {
                 factory = { mapView },
                 update = { map ->
                     map.overlays.removeAll { it is Marker }
-                    state.stops.forEach { stop ->
+
+                    clusterStops(map, state.stops).forEach { cluster ->
+                        val anchor = cluster.first()
                         map.overlays.add(
                             Marker(map).apply {
-                                position = GeoPoint(stop.lat, stop.lon)
-                                title = "${stop.name} (${stop.code})"
+                                position = GeoPoint(anchor.lat, anchor.lon)
                                 setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-                                setOnMarkerClickListener { _, _ -> onStopSelected(stop); true }
+                                if (cluster.size == 1) {
+                                    title = "${anchor.name} (${anchor.code})"
+                                    setOnMarkerClickListener { _, _ -> onStopSelected(anchor); true }
+                                } else {
+                                    title = "${cluster.size} stops"
+                                    setTextIcon(cluster.size.toString())
+                                    setOnMarkerClickListener { _, markerMap ->
+                                        markerMap.controller.animateTo(
+                                            position,
+                                            (markerMap.zoomLevelDouble + 2).coerceAtMost(20.0),
+                                            300L,
+                                        )
+                                        true
+                                    }
+                                }
                             },
                         )
                     }
+
                     state.vehicles.forEach { vehicle ->
                         map.overlays.add(
                             Marker(map).apply {
@@ -140,6 +161,31 @@ fun MapScreen(apiClient: TransitApiClient, onStopSelected: (Stop) -> Unit) {
             }
         }
     }
+}
+
+/** Groups stops whose current screen positions are within [STOP_CLUSTER_RADIUS_PX] of each other. */
+private fun clusterStops(map: MapView, stops: List<Stop>): List<List<Stop>> {
+    val projection = map.projection
+    val clusters = mutableListOf<MutableList<Stop>>()
+    val clusterPoints = mutableListOf<Point>()
+    val radiusSquared = STOP_CLUSTER_RADIUS_PX * STOP_CLUSTER_RADIUS_PX
+
+    stops.forEach { stop ->
+        val point = Point()
+        projection.toPixels(GeoPoint(stop.lat, stop.lon), point)
+        val existingIndex = clusterPoints.indexOfFirst { existing ->
+            val dx = existing.x - point.x
+            val dy = existing.y - point.y
+            dx * dx + dy * dy < radiusSquared
+        }
+        if (existingIndex >= 0) {
+            clusters[existingIndex].add(stop)
+        } else {
+            clusters.add(mutableListOf(stop))
+            clusterPoints.add(point)
+        }
+    }
+    return clusters
 }
 
 private fun MapView.currentViewport(): Viewport {
