@@ -1,25 +1,42 @@
 package dev.dublinbustracker.app.map
 
+import android.Manifest
+import android.annotation.SuppressLint
+import android.content.Context
+import android.content.pm.PackageManager
 import android.graphics.Point
+import android.location.Location
+import android.location.LocationListener
+import android.location.LocationManager
+import android.os.Looper
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -31,9 +48,10 @@ import dev.dublinbustracker.data.TransitApiClient
 import org.osmdroid.events.MapListener
 import org.osmdroid.events.ScrollEvent
 import org.osmdroid.events.ZoomEvent
-import org.osmdroid.tileprovider.tilesource.TileSourceFactory
+import org.osmdroid.tileprovider.tilesource.XYTileSource
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
+import org.osmdroid.views.overlay.CopyrightOverlay
 import org.osmdroid.views.overlay.Marker
 
 private val DUBLIN_CITY_CENTRE = GeoPoint(53.3498, -6.2603)
@@ -41,6 +59,27 @@ private val DUBLIN_CITY_CENTRE = GeoPoint(53.3498, -6.2603)
 // Stops at city-wide zoom otherwise render as 100+ overlapping pins. Markers whose screen
 // positions land within this many pixels of each other are merged into one numbered pin.
 private const val STOP_CLUSTER_RADIUS_PX = 60
+
+private const val MY_LOCATION_ZOOM = 17.0
+
+/**
+ * CARTO's free Voyager style: no API key, and a much cleaner/more modern look than osmdroid's
+ * default (Mapnik's busy standard OSM styling).
+ */
+private val MODERN_TILE_SOURCE = XYTileSource(
+    "CartoVoyager",
+    0,
+    20,
+    256,
+    ".png",
+    arrayOf(
+        "https://a.basemaps.cartocdn.com/rastertiles/voyager/",
+        "https://b.basemaps.cartocdn.com/rastertiles/voyager/",
+        "https://c.basemaps.cartocdn.com/rastertiles/voyager/",
+        "https://d.basemaps.cartocdn.com/rastertiles/voyager/",
+    ),
+    "© OpenStreetMap contributors © CARTO",
+)
 
 @Composable
 fun MapScreen(apiClient: TransitApiClient, onStopSelected: (Stop) -> Unit) {
@@ -54,11 +93,19 @@ fun MapScreen(apiClient: TransitApiClient, onStopSelected: (Stop) -> Unit) {
 
     val mapView = remember {
         MapView(context).apply {
-            setTileSource(TileSourceFactory.MAPNIK)
+            setTileSource(MODERN_TILE_SOURCE)
             setMultiTouchControls(true)
             controller.setZoom(15.0)
             controller.setCenter(DUBLIN_CITY_CENTRE)
+            overlays.add(CopyrightOverlay(context))
         }
+    }
+    var pendingLocationRequest by remember { mutableStateOf(false) }
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        if (granted && pendingLocationRequest) seekToCurrentLocation(context, mapView)
+        pendingLocationRequest = false
     }
 
     DisposableEffect(lifecycleOwner, mapView) {
@@ -159,8 +206,60 @@ fun MapScreen(apiClient: TransitApiClient, onStopSelected: (Stop) -> Unit) {
             if (state.loading) {
                 CircularProgressIndicator(modifier = Modifier.align(Alignment.TopEnd).padding(16.dp))
             }
+
+            FloatingActionButton(
+                onClick = {
+                    val hasPermission = ContextCompat.checkSelfPermission(
+                        context,
+                        Manifest.permission.ACCESS_FINE_LOCATION,
+                    ) == PackageManager.PERMISSION_GRANTED
+                    if (hasPermission) {
+                        seekToCurrentLocation(context, mapView)
+                    } else {
+                        pendingLocationRequest = true
+                        locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+                    }
+                },
+                modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
+            ) {
+                Icon(Icons.Filled.MyLocation, contentDescription = "Go to my location")
+            }
         }
     }
+}
+
+/** Centres the map on the device's current location, requesting one fresh fix if there's no
+ * recent one cached. Caller must already hold ACCESS_FINE_LOCATION or ACCESS_COARSE_LOCATION. */
+@SuppressLint("MissingPermission")
+private fun seekToCurrentLocation(context: Context, mapView: MapView) {
+    val locationManager = context.getSystemService(LocationManager::class.java) ?: return
+    val onFix: (Location) -> Unit = { location ->
+        mapView.controller.animateTo(GeoPoint(location.latitude, location.longitude), MY_LOCATION_ZOOM, 500L)
+    }
+
+    val providers = listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)
+        .filter { runCatching { locationManager.isProviderEnabled(it) }.getOrDefault(false) }
+    val lastKnown = providers
+        .mapNotNull { runCatching { locationManager.getLastKnownLocation(it) }.getOrNull() }
+        .maxByOrNull { it.time }
+    if (lastKnown != null) {
+        onFix(lastKnown)
+        return
+    }
+
+    val provider = providers.firstOrNull() ?: return
+    locationManager.requestLocationUpdates(
+        provider,
+        0L,
+        0f,
+        object : LocationListener {
+            override fun onLocationChanged(location: Location) {
+                onFix(location)
+                locationManager.removeUpdates(this)
+            }
+        },
+        Looper.getMainLooper(),
+    )
 }
 
 /** Groups stops whose current screen positions are within [STOP_CLUSTER_RADIUS_PX] of each other. */
