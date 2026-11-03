@@ -38,14 +38,31 @@ Working rules that kept it stable after the fix:
   *incremental* build (most of the task graph `UP-TO-DATE`) is fine - that's most of what you'll
   do day to day.
 - If a build does start climbing (`free -h` available memory dropping, swap climbing), **kill
-  the emulator, not the build**: `pkill -f "qemu-system-x86_64.*dublinbus-api36"`. The build
-  will finish compiling and only fail at the final install step (`No connected devices!`) -
-  reboot the emulator and re-run `./gradlew :app:installDebug`, which reuses the now-cached
-  compile output and takes seconds.
+  the emulator, not the build**: find its real PID with `pgrep -af qemu-system` and `kill` it (see
+  the warning below about why a name-based `pkill` can silently miss it). The build will finish
+  compiling and only fail at the final install step (`No connected devices!`) - reboot the
+  emulator and re-run `./gradlew :app:installDebug`, which reuses the now-cached compile output
+  and takes seconds.
 - **Stop the Gradle daemon after a build** rather than leaving it idle: `./gradlew --stop`. An
   idle daemon still holds its full heap.
 - Check headroom with `free -h` (the `available` column, not `free`) between steps rather than
   assuming.
+- **The running emulator costs more than its configured RAM.** The 1536M in `config.ini` is only
+  the guest's RAM; QEMU's own overhead (graphics, translation, disk cache) pushed the real RSS to
+  about **4.3GB** in practice - over half this machine's total RAM by itself. Budget for that, not
+  for 1536M.
+
+### A `pkill` pattern can silently fail to match - verify, don't trust
+
+After renaming the AVD mid-session (`avdmanager move avd --rename`), every later boot command in
+this doc already used the new name `dublinbus-api36` - but a *process already running* keeps
+whatever `-avd <name>` it was launched with in its command line. A `pkill -f
+"qemu-system.*dublinbus-api36"` run against an older process still carrying the previous `-avd
+dbus-dev` just matches nothing and exits quietly - it does not error, so nothing in the output
+tells you it failed. That let one emulator instance keep running, un-killed, for the rest of a
+session despite several "kill the emulator" attempts. If you kill-by-pattern and memory doesn't
+recover, don't assume the kill worked: confirm with `pgrep -af qemu-system` and check the actual
+command line, or just kill by PID once you've looked.
 
 ## Day-to-day commands
 
@@ -86,10 +103,29 @@ that was already open keeps its old group list. `sg kvm -c '<command>'` runs one
 ## Known-good state as of this setup
 
 Verified working end to end: booted the emulator, built and installed the app, started
-`dublin-bus-server` locally, launched the app, and searched for a real stop ("Trinity") -
-got back real Dublin Bus stops with real route numbers from the live NTA feed. See the app
-README's "Configuring the server" section for how the connection is wired.
+`dublin-bus-server` locally, and clicked through all four tabs (Search, Map, Favourites,
+Settings) against the live NTA feed - stop search, arrivals, favouriting, and the map all
+return and display real Dublin Bus data. `./gradlew :core:test :data:test :app:testDebugUnitTest`
+is green (`:app` has no unit tests of its own; its logic lives in `:core`/`:data`).
+
+Three real bugs were found this way (not reachable by unit tests, since they're about how
+Compose actually renders/handles touch on a device) and fixed:
+- Top-row controls (stop detail's Back and favourite-star buttons, and on first boot the tab
+  row) sat under the status bar on `targetSdk` 36 (edge-to-edge is mandatory from Android 15,
+  with no opt-out) and were untappable. Fixed with `safeDrawingPadding()` on the root `Surface`
+  in both `MainActivity` and `WidgetConfigActivity`.
+- The map rendered every nearby stop (up to 200) as a full-size pin with no decluttering -
+  at the default city-wide zoom this produced ~80 fully overlapping, untappable markers over
+  central Dublin. Fixed with simple screen-space clustering in `MapScreen.kt`.
+- The Settings screen's header text still told users to set `X-Api-Key` for "the server's own
+  key," left over from before the server repo dropped its own auth.
 
 One caveat: the `dublin-bus-server` binary used for that check was built before the
 static-GTFS-auto-refresh commit, so it's missing that one feature (unrelated to anything the
 app does - rebuild with `./gradlew installDist` in `dublin-bus-server/` to pick it up).
+
+## Current state (end of this session)
+
+The emulator and Gradle daemon were both stopped to free RAM; `dublin-bus-server` is still
+running locally on port 8080. To pick back up: boot the emulator (command above), it'll find
+the running server automatically via `10.0.2.2:8080`, no server restart needed.
