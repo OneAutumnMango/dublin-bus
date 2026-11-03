@@ -20,6 +20,11 @@ schedule, so this app never touches NTA directly and is never rate limited itsel
 ./scripts/test.sh               # run all unit tests
 ```
 
+Running an emulator (rather than a physical device)? See
+[`docs/emulator-setup.md`](docs/emulator-setup.md) - in particular its memory-constraints
+section if you're on a machine with limited RAM (e.g. a modest WSL2 instance), since an
+emulator plus a cold Gradle build can be enough to OOM-crash the whole VM.
+
 Then point the app at a running server, either in the app or at build time.
 
 ### Configuring the server (in the app)
@@ -27,9 +32,10 @@ Open the **Settings** tab:
 
 - **Server address** — e.g. `http://10.0.2.2:8080/` for a server on your dev machine reached
   from the emulator, or whatever public URL you've exposed it on.
-- **Request headers** — any number of `Name` / `Value` rows, sent with every request. Use
-  `X-Api-Key` with the value of the server's `SERVER_API_KEY`. Add more rows for anything
-  sitting in front of the server (a reverse proxy's auth headers, a bearer token, and so on).
+- **Request headers** — any number of `Name` / `Value` rows, sent with every request. The
+  server itself has no auth of its own (it's meant to sit behind something that already gates
+  access, e.g. Cloudflare Access) - this is for headers something in front of it needs, such as
+  a reverse proxy's auth header or a bearer token.
 - **Save & test** — saves, then calls `/v1/status` and reports what the server came back with,
   so you know the address and headers are right before leaving the screen.
 
@@ -40,7 +46,8 @@ different server without rebuilding.
 `local.properties` supplies the values the app starts with on a fresh install:
 
 - `server.baseUrl` — e.g. `http://10.0.2.2:8080/`
-- `server.headers` — comma-separated `Name=Value` pairs, e.g. `X-Api-Key=<your key>`
+- `server.headers` — comma-separated `Name=Value` pairs, only needed for whatever sits in front
+  of the server (the server itself has no auth)
 
 Anything saved in Settings overrides these.
 
