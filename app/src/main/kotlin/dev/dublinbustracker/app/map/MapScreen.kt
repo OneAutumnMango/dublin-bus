@@ -48,7 +48,7 @@ import dev.dublinbustracker.data.TransitApiClient
 import org.osmdroid.events.MapListener
 import org.osmdroid.events.ScrollEvent
 import org.osmdroid.events.ZoomEvent
-import org.osmdroid.tileprovider.tilesource.XYTileSource
+import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.CopyrightOverlay
@@ -62,25 +62,6 @@ private const val STOP_CLUSTER_RADIUS_PX = 60
 
 private const val MY_LOCATION_ZOOM = 17.0
 
-/**
- * CARTO's free Voyager style: no API key, and a much cleaner/more modern look than osmdroid's
- * default (Mapnik's busy standard OSM styling).
- */
-private val MODERN_TILE_SOURCE = XYTileSource(
-    "CartoVoyager",
-    0,
-    20,
-    256,
-    ".png",
-    arrayOf(
-        "https://a.basemaps.cartocdn.com/rastertiles/voyager/",
-        "https://b.basemaps.cartocdn.com/rastertiles/voyager/",
-        "https://c.basemaps.cartocdn.com/rastertiles/voyager/",
-        "https://d.basemaps.cartocdn.com/rastertiles/voyager/",
-    ),
-    "© OpenStreetMap contributors © CARTO",
-)
-
 @Composable
 fun MapScreen(apiClient: TransitApiClient, onStopSelected: (Stop) -> Unit) {
     val viewModel = viewModel<MapViewModel>(
@@ -93,7 +74,11 @@ fun MapScreen(apiClient: TransitApiClient, onStopSelected: (Stop) -> Unit) {
 
     val mapView = remember {
         MapView(context).apply {
-            setTileSource(MODERN_TILE_SOURCE)
+            // Every free "nicer-looking" raster provider (CARTO, Wikimedia, Stadia/Stamen,
+            // Thunderforest, MapTiler) now gates tiles behind a signup/API key - confirmed live,
+            // not assumed; see the commit message. Mapnik remains the one genuinely free,
+            // unauthenticated option, so that's the baseline until an API key is wired in.
+            setTileSource(TileSourceFactory.MAPNIK)
             setMultiTouchControls(true)
             controller.setZoom(15.0)
             controller.setCenter(DUBLIN_CITY_CENTRE)
