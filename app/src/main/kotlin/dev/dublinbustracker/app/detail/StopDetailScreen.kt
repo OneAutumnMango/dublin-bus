@@ -116,6 +116,9 @@ private fun ArrivalRow(arrival: Arrival) {
 
 private fun dueText(arrival: Arrival): String {
     val due = if (arrival.dueMinutes <= 0) "Due now" else "Due in ${arrival.dueMinutes} min"
+    // No live update for this trip yet (e.g. it hasn't left its terminus) - this is the static
+    // timetable's time, not a tracked prediction, so it's labelled differently from the rest.
+    if (!arrival.isRealtime) return "$due (scheduled)"
     val delay = arrival.delaySeconds ?: return due
     val minutes = delay / 60
     return when {
