@@ -70,32 +70,34 @@ fun MapCompass(handle: MapHandle, modifier: Modifier = Modifier) {
         color = MaterialTheme.colorScheme.surface,
     ) {
         Box(contentAlignment = Alignment.Center) {
-            Canvas(modifier = Modifier.size(26.dp)) {
-                // The needle is turned against the map's rotation so the red end always points at true north.
-                rotate(degrees = -bearing) {
-                    val middle = center
-                    val half = size.width * 0.22f
-                    drawPath(
-                        Path().apply {
-                            moveTo(middle.x, 0f)
-                            lineTo(middle.x - half, middle.y)
-                            lineTo(middle.x + half, middle.y)
-                            close()
-                        },
-                        NORTH_RED,
-                    )
-                    drawPath(
-                        Path().apply {
-                            moveTo(middle.x, size.height)
-                            lineTo(middle.x - half, middle.y)
-                            lineTo(middle.x + half, middle.y)
-                            close()
-                        },
-                        SOUTH_GREY,
-                    )
+            // Locked means it always faces north, so the needle has nothing to say: just the padlock.
+            if (!locked) {
+                Canvas(modifier = Modifier.size(26.dp)) {
+                    // The needle is turned against the map's rotation so the red end always points at true north.
+                    rotate(degrees = -bearing) {
+                        val middle = center
+                        val half = size.width * 0.22f
+                        drawPath(
+                            Path().apply {
+                                moveTo(middle.x, 0f)
+                                lineTo(middle.x - half, middle.y)
+                                lineTo(middle.x + half, middle.y)
+                                close()
+                            },
+                            NORTH_RED,
+                        )
+                        drawPath(
+                            Path().apply {
+                                moveTo(middle.x, size.height)
+                                lineTo(middle.x - half, middle.y)
+                                lineTo(middle.x + half, middle.y)
+                                close()
+                            },
+                            SOUTH_GREY,
+                        )
+                    }
                 }
-            }
-            if (locked) {
+            } else {
                 Icon(
                     Icons.Filled.Lock,
                     contentDescription = "North is locked",
