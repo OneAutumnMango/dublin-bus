@@ -1,5 +1,6 @@
 package dev.dublinbustracker.app.detail
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -39,6 +40,7 @@ fun StopDetailScreen(
     apiClient: TransitApiClient,
     favouritesRepository: FavouritesRepository,
     onBack: () -> Unit,
+    onViewRoute: (Arrival) -> Unit,
 ) {
     val viewModel = viewModel<StopDetailViewModel>(
         key = stop.id,
@@ -99,7 +101,7 @@ fun StopDetailScreen(
                 Text("No upcoming arrivals")
             } else {
                 LazyColumn {
-                    items(state.arrivals) { arrival -> ArrivalRow(arrival) }
+                    items(state.arrivals) { arrival -> ArrivalRow(arrival, onClick = { onViewRoute(arrival) }) }
                 }
             }
         }
@@ -107,10 +109,12 @@ fun StopDetailScreen(
 }
 
 @Composable
-private fun ArrivalRow(arrival: Arrival) {
+private fun ArrivalRow(arrival: Arrival, onClick: () -> Unit) {
     ListItem(
+        modifier = Modifier.clickable(onClick = onClick),
         headlineContent = { Text("${arrival.routeShortName}  ${arrival.destination}") },
         supportingContent = { Text(dueText(arrival)) },
+        trailingContent = { Text("Route map", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium) },
     )
 }
 

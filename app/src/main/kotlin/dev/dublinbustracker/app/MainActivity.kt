@@ -21,8 +21,10 @@ import androidx.compose.ui.unit.dp
 import dev.dublinbustracker.app.detail.StopDetailScreen
 import dev.dublinbustracker.app.favourites.FavouritesScreen
 import dev.dublinbustracker.app.map.MapScreen
+import dev.dublinbustracker.app.route.RouteMapScreen
 import dev.dublinbustracker.app.search.SearchScreen
 import dev.dublinbustracker.app.settings.SettingsScreen
+import dev.dublinbustracker.core.Arrival
 import dev.dublinbustracker.core.Stop
 
 class MainActivity : ComponentActivity() {
@@ -56,13 +58,23 @@ private fun AppRoot(container: AppContainer) {
     var tab by remember { mutableStateOf(AppTab.SEARCH) }
     var selectedStop by remember { mutableStateOf<Stop?>(null) }
 
+    var routeMapArrival by remember { mutableStateOf<Arrival?>(null) }
+
     val stop = selectedStop
+    val mapArrival = routeMapArrival
     when {
+        stop != null && mapArrival != null -> RouteMapScreen(
+            stop = stop,
+            arrival = mapArrival,
+            apiClient = container.apiClient,
+            onBack = { routeMapArrival = null },
+        )
         stop != null -> StopDetailScreen(
             stop = stop,
             apiClient = container.apiClient,
             favouritesRepository = container.favouritesRepository,
             onBack = { selectedStop = null },
+            onViewRoute = { routeMapArrival = it },
         )
         else -> Column(modifier = Modifier.fillMaxSize()) {
             SecondaryScrollableTabRow(selectedTabIndex = tab.ordinal, edgePadding = 0.dp) {
