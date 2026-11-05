@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
+import dev.dublinbustracker.app.map.MapCache
 import dev.dublinbustracker.app.widget.WidgetRefreshWorker
 import java.util.concurrent.TimeUnit
 
@@ -13,6 +14,7 @@ class BusTrackerApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        runCatching { MapCache.init(this) }
         container = AppContainer(this)
         scheduleWidgetRefresh()
     }
