@@ -41,13 +41,13 @@ fun Arrival.display(nowEpochSeconds: Long, zone: ZoneId): ArrivalDisplay {
     )
 }
 
-private fun minutesText(minutes: Int): String = when {
+internal fun minutesText(minutes: Int): String = when {
     minutes < 60 -> "$minutes min"
     minutes % 60 == 0 -> "${minutes / 60}h"
     else -> "${minutes / 60}h ${minutes % 60}m"
 }
 
-private fun latenessText(delaySeconds: Int): String {
+internal fun latenessText(delaySeconds: Int): String {
     val minutes = delaySeconds / 60
     return when {
         minutes >= 1 -> "$minutes min late"

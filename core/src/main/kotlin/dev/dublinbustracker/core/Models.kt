@@ -52,6 +52,30 @@ data class TripInfo(
     val directionId: String,
 )
 
+/** A bus's last reported position, from the Vehicles feed. */
+data class VehicleDetails(
+    val vehicleId: String,
+    val label: String,
+    val lat: Double,
+    val lon: Double,
+    val timestampEpochSeconds: Long,
+)
+
+/** One stop a trip still has ahead of it, with when the bus is expected there. */
+data class TripStopCall(
+    val stopId: String,
+    val stopName: String,
+    val expectedEpochSeconds: Long,
+    val delaySeconds: Int?,
+)
+
+/** Everything the server knows about one trip: its route, where its bus is, and its upcoming stops. */
+data class TripDetails(
+    val trip: TripInfo,
+    val vehicle: VehicleDetails?,
+    val stopCalls: List<TripStopCall>,
+)
+
 /** The server's own health, shown when testing a connection from Settings. */
 data class ServerStatus(
     val pollIntervalMs: Long,

@@ -240,4 +240,36 @@ class TransitApiClientTest {
         assertEquals(listOf("v1"), client().vehiclesForRoute("3 S8 a", directionId = "1").map { it.vehicleId })
         assertEquals(listOf("v2"), client().vehiclesForRoute("3 S8 a").map { it.vehicleId })
     }
+
+    @Test
+    fun `trip details carry the bus position and upcoming stops`() = runTest {
+        server.enqueue(
+            MockResponse().setBody(
+                """{"tripId":"t1","routeId":"r1","routeShortName":"S2","headsign":"Irishtown","directionId":"1","shapeId":"sh",
+                   "vehicle":{"vehicleId":"245","label":"","tripId":"t1","routeId":"r1","routeShortName":"S2","headsign":"Irishtown",
+                              "directionId":"1","lat":53.29,"lon":-6.14,"timestampEpochSeconds":1700000000},
+                   "stopCalls":[{"stopSequence":2,"stopId":"a","stopName":"First","expectedEpochSeconds":1700000100,"delaySeconds":20},
+                                {"stopSequence":3,"stopId":"b","stopName":"Second","expectedEpochSeconds":1700000200}]}""",
+            ),
+        )
+
+        val details = client().tripDetails("t1")
+
+        assertEquals("/v1/trips/t1", server.takeRequest().path)
+        assertEquals("S2", details.trip.routeShortName)
+        assertEquals("245", details.vehicle?.vehicleId)
+        assertEquals(1700000000L, details.vehicle?.timestampEpochSeconds)
+        assertEquals(listOf("First", "Second"), details.stopCalls.map { it.stopName })
+        assertEquals(listOf<Int?>(20, null), details.stopCalls.map { it.delaySeconds })
+    }
+
+    @Test
+    fun `a trip with no bus yet has no vehicle`() = runTest {
+        server.enqueue(MockResponse().setBody("""{"tripId":"t1","routeId":"r1","routeShortName":"S2","headsign":"X","directionId":"0","shapeId":""}"""))
+
+        val details = client().tripDetails("t1")
+
+        assertEquals(null, details.vehicle)
+        assertEquals(emptyList(), details.stopCalls)
+    }
 }

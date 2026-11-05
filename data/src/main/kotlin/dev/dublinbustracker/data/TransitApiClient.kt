@@ -5,7 +5,10 @@ import dev.dublinbustracker.core.LatLon
 import dev.dublinbustracker.core.Route
 import dev.dublinbustracker.core.ServerStatus
 import dev.dublinbustracker.core.Stop
+import dev.dublinbustracker.core.TripDetails
 import dev.dublinbustracker.core.TripInfo
+import dev.dublinbustracker.core.TripStopCall
+import dev.dublinbustracker.core.VehicleDetails
 import dev.dublinbustracker.core.VehiclePosition
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -74,6 +77,34 @@ private data class TripDto(
     val routeShortName: String = "",
     val headsign: String = "",
     val directionId: String = "",
+)
+
+@Serializable
+private data class TripVehicleDto(
+    val vehicleId: String,
+    val label: String = "",
+    val lat: Double = 0.0,
+    val lon: Double = 0.0,
+    val timestampEpochSeconds: Long = 0,
+)
+
+@Serializable
+private data class TripStopCallDto(
+    val stopId: String,
+    val stopName: String = "",
+    val expectedEpochSeconds: Long = 0,
+    val delaySeconds: Int? = null,
+)
+
+@Serializable
+private data class TripDetailsDto(
+    val tripId: String,
+    val routeId: String = "",
+    val routeShortName: String = "",
+    val headsign: String = "",
+    val directionId: String = "",
+    val vehicle: TripVehicleDto? = null,
+    val stopCalls: List<TripStopCallDto> = emptyList(),
 )
 
 @Serializable
@@ -172,6 +203,17 @@ class TransitApiClient(
             json.decodeFromString<TripDto>(body).let {
                 TripInfo(it.tripId, it.routeId, it.routeShortName, it.headsign, it.directionId)
             }
+        }
+
+    /** A trip's route, its bus's last position and the stops it has still to make. */
+    suspend fun tripDetails(tripId: String): TripDetails =
+        get("v1/trips/$tripId") { body ->
+            val dto = json.decodeFromString<TripDetailsDto>(body)
+            TripDetails(
+                trip = TripInfo(dto.tripId, dto.routeId, dto.routeShortName, dto.headsign, dto.directionId),
+                vehicle = dto.vehicle?.let { VehicleDetails(it.vehicleId, it.label, it.lat, it.lon, it.timestampEpochSeconds) },
+                stopCalls = dto.stopCalls.map { TripStopCall(it.stopId, it.stopName, it.expectedEpochSeconds, it.delaySeconds) },
+            )
         }
 
     /** The path a trip drives, as map points. */
