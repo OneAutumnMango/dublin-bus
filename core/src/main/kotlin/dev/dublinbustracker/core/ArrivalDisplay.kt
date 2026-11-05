@@ -55,3 +55,7 @@ internal fun latenessText(delaySeconds: Int): String {
         else -> "on time"
     }
 }
+
+/** The routes at a stop with the way each goes, as small print: "4 (W)  L25 (W)  L27 (SW)". */
+fun headingsText(headings: List<RouteHeading>): String =
+    headings.joinToString("  ") { "${it.route} (${it.compass})" }

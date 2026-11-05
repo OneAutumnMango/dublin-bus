@@ -3,6 +3,7 @@ package dev.dublinbustracker.data
 import dev.dublinbustracker.core.Arrival
 import dev.dublinbustracker.core.LatLon
 import dev.dublinbustracker.core.Route
+import dev.dublinbustracker.core.RouteHeading
 import dev.dublinbustracker.core.ServerStatus
 import dev.dublinbustracker.core.Stop
 import dev.dublinbustracker.core.TripDetails
@@ -34,7 +35,11 @@ private data class StopDto(
     val lat: Double = 0.0,
     val lon: Double = 0.0,
     val routes: List<String> = emptyList(),
+    val headings: List<HeadingDto> = emptyList(),
 )
+
+@Serializable
+private data class HeadingDto(val route: String, val compass: String)
 
 @Serializable
 private data class ArrivalDto(
@@ -278,7 +283,7 @@ class TransitApiClient(
         }
     }
 
-    private fun StopDto.toStop() = Stop(id, code, name, lat, lon, routes)
+    private fun StopDto.toStop() = Stop(id, code, name, lat, lon, routes, headings.map { RouteHeading(it.route, it.compass) })
 
     private fun ArrivalDto.toArrival() = Arrival(
         routeShortName = routeShortName,

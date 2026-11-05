@@ -78,4 +78,17 @@ class ArrivalDisplayTest {
         assertEquals("Due", shown.headline)
         assertEquals("May have left · was due 5 min ago", shown.detailLine)
     }
+
+    @Test
+    fun `a stop's routes read as bus numbers with their direction`() {
+        val headings = listOf(RouteHeading("4", "W"), RouteHeading("L25", "W"), RouteHeading("L27", "SW"))
+
+        assertEquals("4 (W)  L25 (W)  L27 (SW)", headingsText(headings))
+    }
+
+    @Test
+    fun `a route passing both ways shows both and no routes shows nothing`() {
+        assertEquals("9 (N/S)", headingsText(listOf(RouteHeading("9", "N/S"))))
+        assertEquals("", headingsText(emptyList()))
+    }
 }

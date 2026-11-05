@@ -1,5 +1,6 @@
 package dev.dublinbustracker.data
 
+import dev.dublinbustracker.core.RouteHeading
 import dev.dublinbustracker.core.TripInfo
 import kotlinx.coroutines.test.runTest
 import okhttp3.mockwebserver.MockResponse
@@ -281,5 +282,26 @@ class TransitApiClientTest {
 
         assertEquals("/v1/routes/3%20S8%20a/shape?direction=1", server.takeRequest().path)
         assertEquals(3, shape.size)
+    }
+
+    @Test
+    fun `a stop carries which way each route heads there`() = runTest {
+        server.enqueue(
+            MockResponse().setBody(
+                """{"id":"s1","code":"2051","name":"Lanesville","lat":53.28,"lon":-6.16,"routes":["4","L25"],
+                   "headings":[{"route":"4","compass":"W"},{"route":"L25","compass":"SW"}]}""",
+            ),
+        )
+
+        val stop = client().stop("2051")
+
+        assertEquals(listOf(RouteHeading("4", "W"), RouteHeading("L25", "SW")), stop.headings)
+    }
+
+    @Test
+    fun `an older server with no headings still parses`() = runTest {
+        server.enqueue(MockResponse().setBody("""{"id":"s1","code":"1","name":"X","lat":1.0,"lon":2.0,"routes":["4"]}"""))
+
+        assertEquals(emptyList(), client().stop("1").headings)
     }
 }

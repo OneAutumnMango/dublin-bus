@@ -1,5 +1,6 @@
 package dev.dublinbustracker.data
 
+import dev.dublinbustracker.core.RouteHeading
 import dev.dublinbustracker.core.Stop
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -15,12 +16,24 @@ data class FavouriteStop(
     val name: String = "",
     val lat: Double = 0.0,
     val lon: Double = 0.0,
+    /** Which way each route goes at this stop, kept so the list can show it without the server. */
+    val headings: List<FavouriteHeading> = emptyList(),
 ) {
     /** True for entries migrated from the old id-only format, which the UI backfills. */
     val needsDetails: Boolean get() = name.isBlank()
 
-    fun toStop() = Stop(id, code, name, lat, lon)
+    fun toStop() = Stop(id, code, name, lat, lon, headings = headings.map { RouteHeading(it.route, it.compass) })
+
+    companion object {
+        fun of(stop: Stop) = FavouriteStop(
+            stop.id, stop.code, stop.name, stop.lat, stop.lon,
+            stop.headings.map { FavouriteHeading(it.route, it.compass) },
+        )
+    }
 }
+
+@Serializable
+data class FavouriteHeading(val route: String, val compass: String)
 
 interface FavouritesStorage {
     fun loadRaw(): String?
@@ -44,7 +57,7 @@ class FavouritesRepository(private val storage: FavouritesStorage) {
             if (current.any { it.id == stop.id }) {
                 current.filterNot { it.id == stop.id }
             } else {
-                current + FavouriteStop(stop.id, stop.code, stop.name, stop.lat, stop.lon)
+                current + FavouriteStop.of(stop)
             },
         )
     }
@@ -53,11 +66,9 @@ class FavouritesRepository(private val storage: FavouritesStorage) {
 
     /** Fills in or refreshes a favourite once the server has supplied its details. */
     fun updateDetails(stop: Stop) {
-        publish(
-            _favourites.value.map {
-                if (it.id == stop.id) FavouriteStop(stop.id, stop.code, stop.name, stop.lat, stop.lon) else it
-            },
-        )
+        val updated = _favourites.value.map { if (it.id == stop.id) FavouriteStop.of(stop) else it }
+        // Details are refreshed on every visit; only write when something actually changed.
+        if (updated != _favourites.value) publish(updated)
     }
 
     private fun publish(updated: List<FavouriteStop>) {

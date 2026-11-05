@@ -1,5 +1,6 @@
 package dev.dublinbustracker.data
 
+import dev.dublinbustracker.core.RouteHeading
 import dev.dublinbustracker.core.Stop
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -8,9 +9,11 @@ import kotlin.test.assertTrue
 
 class FavouritesRepositoryTest {
     private class FakeStorage(var raw: String? = null) : FavouritesStorage {
+        var saves = 0
         override fun loadRaw(): String? = raw
         override fun saveRaw(json: String) {
             raw = json
+            saves++
         }
     }
 
@@ -88,5 +91,59 @@ class FavouritesRepositoryTest {
     @Test
     fun `corrupt storage falls back to an empty list`() {
         assertEquals(emptyList(), FavouritesRepository(FakeStorage("nonsense")).favourites.value)
+    }
+
+    @Test
+    fun `a favourite keeps which way its routes head, across a restart`() {
+        val storage = FakeStorage()
+        val withHeadings = trinity.copy(headings = listOf(RouteHeading("15", "W"), RouteHeading("27", "NE")))
+        FavouritesRepository(storage).toggle(withHeadings)
+
+        val reloaded = FavouritesRepository(storage).favourites.value.single().toStop()
+
+        assertEquals(listOf(RouteHeading("15", "W"), RouteHeading("27", "NE")), reloaded.headings)
+    }
+
+    @Test
+    fun `updating details fills in the headings`() {
+        val repository = FavouritesRepository(FakeStorage())
+        repository.toggle(trinity) // saved before the server said which way its routes go
+        assertEquals(emptyList(), repository.favourites.value.single().headings)
+
+        repository.updateDetails(trinity.copy(headings = listOf(RouteHeading("15", "W"))))
+
+        assertEquals(listOf(FavouriteHeading("15", "W")), repository.favourites.value.single().headings)
+    }
+
+    @Test
+    fun `favourites saved before headings existed still load`() {
+        val storage = FakeStorage("""[{"id":"s1","code":"1001","name":"Trinity College","lat":53.3441,"lon":-6.2578}]""")
+
+        val favourite = FavouritesRepository(storage).favourites.value.single()
+
+        assertEquals("Trinity College", favourite.name)
+        assertEquals(emptyList(), favourite.headings)
+    }
+
+    @Test
+    fun `refreshing a favourite with nothing new does not rewrite storage`() {
+        val storage = FakeStorage()
+        val repository = FavouritesRepository(storage)
+        repository.toggle(trinity)
+        val savesAfterToggle = storage.saves
+
+        repository.updateDetails(trinity)
+
+        assertEquals(savesAfterToggle, storage.saves)
+    }
+
+    @Test
+    fun `refreshing replaces out-of-date headings`() {
+        val repository = FavouritesRepository(FakeStorage())
+        repository.toggle(trinity.copy(headings = listOf(RouteHeading("15", "W"))))
+
+        repository.updateDetails(trinity.copy(headings = listOf(RouteHeading("15", "NW"))))
+
+        assertEquals(listOf(FavouriteHeading("15", "NW")), repository.favourites.value.single().headings)
     }
 }
