@@ -110,6 +110,7 @@ fun MapScreen(apiClient: TransitApiClient, onStopSelected: (Stop) -> Unit) {
     val state by viewModel.uiState.collectAsState()
     val showBuses by viewModel.showBuses.collectAsState()
     val tracking by viewModel.tracking.collectAsState()
+    val suggestions by viewModel.suggestions.collectAsState()
     val context = LocalContext.current
     val handle = rememberMapHandle()
     val latestStops by rememberUpdatedState(state.stops)
@@ -226,16 +227,16 @@ fun MapScreen(apiClient: TransitApiClient, onStopSelected: (Stop) -> Unit) {
         TRACK_LAYERS.forEach { style.getLayer(it)?.setProperties(visibility(if (tracking.enabled) Property.VISIBLE else Property.NONE)) }
     }
 
-    LaunchedEffect(handle.style, tracking.routes, tracking.vehicles, tracking.shapes) {
+    LaunchedEffect(handle.style, tracking.routes, tracking.vehicles, tracking.shapes, tracking.hidden) {
         val style = handle.style ?: return@LaunchedEffect
         val lines = tracking.routes.flatMap { route ->
-            tracking.shapes[route.name].orEmpty().filterValues { it.size >= 2 }.map { (direction, path) ->
+            tracking.shapes[route.name].orEmpty().filter { (direction, path) -> path.size >= 2 && (route.name to direction) !in tracking.hidden }.map { (direction, path) ->
                 Feature.fromGeometry(LineString.fromLngLats(path.map { Point.fromLngLat(it.lon, it.lat) }))
                     .also { it.addStringProperty("color", trackingColour(route.colourIndex, direction).toHexColour()) }
             }
         }
         val buses = tracking.routes.flatMap { route ->
-            tracking.vehicles[route.name].orEmpty().map { bus ->
+            tracking.vehicles[route.name].orEmpty().filter { (route.name to it.directionId) !in tracking.hidden }.map { bus ->
                 featureAt(
                     bus.position.lat,
                     bus.position.lon,
@@ -332,7 +333,14 @@ fun MapScreen(apiClient: TransitApiClient, onStopSelected: (Stop) -> Unit) {
         }
 
         if (tracking.enabled) {
-            TrackingPanel(state = tracking, onAdd = viewModel::addRoute, onRemove = viewModel::removeRoute)
+            TrackingPanel(
+                state = tracking,
+                suggestions = suggestions,
+                onQueryChanged = viewModel::onRouteQueryChanged,
+                onAdd = viewModel::addRoute,
+                onRemove = viewModel::removeRoute,
+                onToggleDirection = viewModel::toggleDirection,
+            )
         }
 
         state.message?.let {
