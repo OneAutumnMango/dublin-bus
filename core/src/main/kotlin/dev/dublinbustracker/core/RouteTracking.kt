@@ -38,15 +38,41 @@ private fun lighten(colour: Int, amount: Float): Int {
 
 data class LegendEntry(val route: String, val directionId: String, val headsign: String)
 
-/** One entry per route and direction that has a live bus, labelled with where that direction is heading. */
-fun legendFor(routes: List<String>, vehicles: Map<String, List<VehiclePosition>>): List<LegendEntry> =
+/**
+ * One entry per direction of each route, in route order, labelled with where that direction is
+ * heading: the most common headsign among its live buses, else the [destinations] known for it
+ * (the end of its stop pattern) so a direction with no bus right now can still be switched on or off.
+ */
+fun legendFor(
+    routes: List<String>,
+    vehicles: Map<String, List<VehiclePosition>>,
+    destinations: Map<String, Map<String, String>> = emptyMap(),
+): List<LegendEntry> =
     routes.flatMap { route ->
-        vehicles[route].orEmpty()
-            .groupBy { it.directionId }
-            .toSortedMap()
-            .map { (direction, buses) ->
-                // The most common headsign wins, in case a short working or two disagrees.
-                val headsign = buses.groupingBy { it.headsign }.eachCount().maxByOrNull { it.value }?.key.orEmpty()
-                LegendEntry(route, direction, headsign)
-            }
+        val live = vehicles[route].orEmpty().groupBy { it.directionId }
+        val known = destinations[route].orEmpty()
+        (live.keys + known.keys).toSortedSet().map { direction ->
+            // The most common headsign wins, in case a short working or two disagrees.
+            val headsign = live[direction]?.groupingBy { it.headsign }?.eachCount()?.maxByOrNull { it.value }?.key
+            LegendEntry(route, direction, headsign?.takeIf { it.isNotBlank() } ?: known[direction].orEmpty())
+        }
     }
+
+/**
+ * Routes to offer while typing: an exact bus number first, then ones starting with the text, then
+ * ones that just contain it (or match on the name), one per bus number.
+ */
+fun rankRouteSuggestions(query: String, routes: List<Route>, limit: Int = 8): List<Route> {
+    val typed = query.trim()
+    if (typed.isEmpty()) return emptyList()
+    fun rank(route: Route) = when {
+        route.shortName.equals(typed, ignoreCase = true) -> 0
+        route.shortName.startsWith(typed, ignoreCase = true) -> 1
+        route.shortName.contains(typed, ignoreCase = true) -> 2
+        else -> 3
+    }
+    return routes
+        .distinctBy { it.shortName.uppercase() }
+        .sortedWith(compareBy({ rank(it) }, { it.shortName.length }, { it.shortName }))
+        .take(limit)
+}

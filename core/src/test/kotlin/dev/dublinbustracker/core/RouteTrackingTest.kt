@@ -80,4 +80,51 @@ class RouteTrackingTest {
 
         assertEquals("Citywest", legendFor(listOf("S8"), vehicles).single().headsign)
     }
+
+    @Test
+    fun `a direction with no bus right now is still listed, named by where it ends`() {
+        val vehicles = mapOf("S8" to listOf(bus("1", "Citywest")))
+        val destinations = mapOf("S8" to mapOf("0" to "Dun Laoghaire Stn", "1" to "Kingswood Avenue"))
+
+        val legend = legendFor(listOf("S8"), vehicles, destinations)
+
+        assertEquals(
+            listOf(LegendEntry("S8", "0", "Dun Laoghaire Stn"), LegendEntry("S8", "1", "Citywest")),
+            legend,
+        )
+    }
+
+    private fun route(short: String, long: String = "") = Route("id-$short-$long", short, long)
+
+    @Test
+    fun `suggestions put the exact bus number first, then ones starting with it`() {
+        val routes = listOf(route("145"), route("14"), route("46A", "via 4th Ave"), route("4"), route("40"), route("4A"))
+
+        // Exact first, then starts-with (shorter then alphabetical), then merely contains.
+        assertEquals(listOf("4", "40", "4A", "46A", "14", "145"), rankRouteSuggestions("4", routes).map { it.shortName })
+    }
+
+    @Test
+    fun `suggestions are one per bus number and capped`() {
+        val routes = (1..20).map { route("4$it") } + route("4", "one") + route("4", "two")
+
+        val suggestions = rankRouteSuggestions("4", routes, limit = 5)
+
+        assertEquals(5, suggestions.size)
+        assertEquals(1, suggestions.count { it.shortName == "4" })
+        assertEquals("4", suggestions.first().shortName)
+    }
+
+    @Test
+    fun `suggestions are case-insensitive and nothing is suggested for blank text`() {
+        assertEquals("S8", rankRouteSuggestions("s8", listOf(route("S8"), route("S2"))).first().shortName)
+        assertEquals(emptyList(), rankRouteSuggestions("  ", listOf(route("S8"))))
+    }
+
+    @Test
+    fun `a name-only match is offered after the number matches`() {
+        val routes = listOf(route("S8", "Kingswood to 4 Park"), route("14"))
+
+        assertEquals(listOf("14", "S8"), rankRouteSuggestions("4", routes).map { it.shortName })
+    }
 }
