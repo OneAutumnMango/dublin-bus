@@ -1,12 +1,5 @@
 package dev.dublinbustracker.app.route
 
-import android.content.Context
-import android.graphics.Bitmap
-import android.graphics.Canvas
-import android.graphics.Paint
-import android.graphics.RectF
-import android.graphics.drawable.BitmapDrawable
-import android.graphics.drawable.Drawable
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -20,42 +13,82 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import dev.dublinbustracker.app.map.MAP_BLUE
+import dev.dublinbustracker.app.map.MAP_BOLD_FONT
+import dev.dublinbustracker.app.map.collectionOf
+import dev.dublinbustracker.app.map.featureAt
+import dev.dublinbustracker.app.map.rememberMapHandle
 import dev.dublinbustracker.core.Arrival
 import dev.dublinbustracker.core.Stop
 import dev.dublinbustracker.data.TransitApiClient
-import org.osmdroid.tileprovider.tilesource.TileSourceFactory
-import org.osmdroid.util.BoundingBox
-import org.osmdroid.util.GeoPoint
-import org.osmdroid.views.MapView
-import org.osmdroid.views.overlay.CopyrightOverlay
-import org.osmdroid.views.overlay.Marker
-import org.osmdroid.views.overlay.Polyline
+import org.maplibre.android.camera.CameraUpdateFactory
+import org.maplibre.android.geometry.LatLng
+import org.maplibre.android.geometry.LatLngBounds
+import org.maplibre.android.maps.MapLibreMap
+import org.maplibre.android.style.expressions.Expression
+import org.maplibre.android.style.layers.CircleLayer
+import org.maplibre.android.style.layers.LineLayer
+import org.maplibre.android.style.layers.PropertyFactory.circleColor
+import org.maplibre.android.style.layers.PropertyFactory.circleRadius
+import org.maplibre.android.style.layers.PropertyFactory.circleStrokeColor
+import org.maplibre.android.style.layers.PropertyFactory.circleStrokeWidth
+import org.maplibre.android.style.layers.PropertyFactory.lineCap
+import org.maplibre.android.style.layers.PropertyFactory.lineColor
+import org.maplibre.android.style.layers.PropertyFactory.lineJoin
+import org.maplibre.android.style.layers.PropertyFactory.lineWidth
+import org.maplibre.android.style.layers.PropertyFactory.textAllowOverlap
+import org.maplibre.android.style.layers.PropertyFactory.textColor
+import org.maplibre.android.style.layers.PropertyFactory.textField
+import org.maplibre.android.style.layers.PropertyFactory.textFont
+import org.maplibre.android.style.layers.PropertyFactory.textSize
+import org.maplibre.android.style.layers.Property
+import org.maplibre.android.style.layers.SymbolLayer
+import org.maplibre.android.style.sources.GeoJsonSource
+import org.maplibre.geojson.Feature
+import org.maplibre.geojson.LineString
+import org.maplibre.geojson.Point
 
-private const val ROUTE_LINE_COLOR = 0xFF1565C0.toInt()
 private const val THIS_STOP_COLOR = 0xFFD32F2F.toInt()
 private const val YOUR_BUS_COLOR = 0xFF2E7D32.toInt()
 private const val OTHER_BUS_COLOR = 0xFFEF6C00.toInt()
 private const val FIT_PADDING_PX = 80
+private const val STOPS_MIN_ZOOM = 11f
+
+private const val LINE_SOURCE = "route-line"
+private const val STOPS_SOURCE = "route-stops"
+private const val SELECTED_SOURCE = "route-selected"
+private const val BUSES_SOURCE = "route-buses"
+private const val STOPS_LAYER = "route-stops-layer"
+private const val SELECTED_LAYER = "route-selected-layer"
+private const val BUSES_LAYER = "route-buses-layer"
+
+/** [farOut] when the whole route is in view, [closeIn] by street level: keeps dense stops from swamping the path. */
+private fun zoomScaled(farOut: Float, closeIn: Float): Expression =
+    Expression.interpolate(
+        Expression.linear(),
+        Expression.zoom(),
+        Expression.stop(9, farOut),
+        Expression.stop(15, closeIn),
+    )
 
 /**
  * The route [arrival] is running: its path, every stop along it, [stop] (the one being viewed)
@@ -68,36 +101,112 @@ fun RouteMapScreen(stop: Stop, arrival: Arrival, apiClient: TransitApiClient, on
         factory = viewModelFactory { initializer { RouteMapViewModel(arrival.tripId, apiClient) } },
     )
     val state by viewModel.uiState.collectAsState()
-    val context = LocalContext.current
-    val lifecycleOwner = LocalLifecycleOwner.current
+    val handle = rememberMapHandle()
+    var tappedLabel by remember { mutableStateOf<String?>(null) }
 
     BackHandler(onBack = onBack)
 
-    val mapView = remember {
-        MapView(context).apply {
-            setTileSource(TileSourceFactory.MAPNIK)
-            setMultiTouchControls(true)
-            overlays.add(CopyrightOverlay(context))
+    // Layers go in bottom-to-top once per loaded style: path, stops, buses, then the viewed
+    // stop last so a bus parked there can't hide it.
+    LaunchedEffect(handle.style) {
+        val style = handle.style ?: return@LaunchedEffect
+        listOf(LINE_SOURCE, STOPS_SOURCE, BUSES_SOURCE, SELECTED_SOURCE).forEach {
+            style.addSource(GeoJsonSource(it, collectionOf(emptyList())))
         }
+        style.addLayer(
+            LineLayer("route-casing", LINE_SOURCE).withProperties(
+                lineColor(android.graphics.Color.WHITE), lineWidth(zoomScaled(5f, 10f)), lineCap(Property.LINE_CAP_ROUND), lineJoin(Property.LINE_JOIN_ROUND),
+            ),
+        )
+        style.addLayer(
+            LineLayer("route-path", LINE_SOURCE).withProperties(
+                lineColor(MAP_BLUE), lineWidth(zoomScaled(3f, 6f)), lineCap(Property.LINE_CAP_ROUND), lineJoin(Property.LINE_JOIN_ROUND),
+            ),
+        )
+        // On a long route the stops overlap into a solid smear that hides the path itself, so they only appear once zoomed in.
+        style.addLayer(
+            CircleLayer(STOPS_LAYER, STOPS_SOURCE).apply { minZoom = STOPS_MIN_ZOOM }.withProperties(
+                circleColor(android.graphics.Color.WHITE), circleStrokeColor(MAP_BLUE), circleStrokeWidth(zoomScaled(1f, 2.5f)), circleRadius(zoomScaled(2.5f, 5.5f)),
+            ),
+        )
+        style.addLayer(
+            CircleLayer(BUSES_LAYER, BUSES_SOURCE).withProperties(
+                circleColor(
+                    Expression.switchCase(
+                        Expression.eq(Expression.get("yours"), Expression.literal(true)),
+                        Expression.color(YOUR_BUS_COLOR),
+                        Expression.color(OTHER_BUS_COLOR),
+                    ),
+                ),
+                circleStrokeColor(android.graphics.Color.WHITE), circleStrokeWidth(2f), circleRadius(15f),
+            ),
+        )
+        style.addLayer(
+            SymbolLayer("route-bus-labels", BUSES_SOURCE).withProperties(
+                textField(Expression.get("label")), textFont(MAP_BOLD_FONT), textSize(11f),
+                textColor(android.graphics.Color.WHITE), textAllowOverlap(true),
+            ),
+        )
+        style.addLayer(
+            CircleLayer(SELECTED_LAYER, SELECTED_SOURCE).withProperties(
+                circleColor(THIS_STOP_COLOR), circleStrokeColor(android.graphics.Color.WHITE), circleStrokeWidth(3f), circleRadius(11f),
+            ),
+        )
     }
-    DisposableEffect(lifecycleOwner, mapView) {
-        val observer = LifecycleEventObserver { _, event ->
-            when (event) {
-                Lifecycle.Event.ON_RESUME -> mapView.onResume()
-                Lifecycle.Event.ON_PAUSE -> mapView.onPause()
-                else -> Unit
-            }
+
+    LaunchedEffect(handle.style, state.data) {
+        val style = handle.style ?: return@LaunchedEffect
+        val data = state.data ?: return@LaunchedEffect
+        val points = data.shape.map { Point.fromLngLat(it.lon, it.lat) }
+        if (points.size >= 2) {
+            style.getSourceAs<GeoJsonSource>(LINE_SOURCE)?.setGeoJson(Feature.fromGeometry(LineString.fromLngLats(points)))
         }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose {
-            lifecycleOwner.lifecycle.removeObserver(observer)
-            mapView.onDetach()
+        style.getSourceAs<GeoJsonSource>(STOPS_SOURCE)?.setGeoJson(
+            collectionOf(
+                data.stops.filter { it.id != stop.id }
+                    .map { featureAt(it.lat, it.lon, "title" to "${it.name} (${it.code})") },
+            ),
+        )
+        style.getSourceAs<GeoJsonSource>(SELECTED_SOURCE)?.setGeoJson(
+            featureAt(stop.lat, stop.lon, "title" to "${stop.name} (${stop.code}) - this stop"),
+        )
+        // Fitted once, here, so the 30s bus refreshes below can't yank the camera back mid-pan.
+        val map = handle.map
+        if (map != null && data.shape.isNotEmpty()) {
+            val bounds = LatLngBounds.Builder().includes(data.shape.map { LatLng(it.lat, it.lon) }).build()
+            map.moveCamera(CameraUpdateFactory.newLatLngBounds(bounds, FIT_PADDING_PX))
         }
     }
 
-    // The camera is fitted to the route once; later bus refreshes must not yank it back
-    // while the user is panning around.
-    val fitted = remember { booleanArrayOf(false) }
+    LaunchedEffect(handle.style, state.vehicles) {
+        handle.style?.getSourceAs<GeoJsonSource>(BUSES_SOURCE)?.setGeoJson(
+            collectionOf(
+                state.vehicles.map { vehicle ->
+                    val yours = arrival.vehicleId != null && vehicle.vehicleId == arrival.vehicleId
+                    featureAt(
+                        vehicle.position.lat,
+                        vehicle.position.lon,
+                        "label" to vehicle.routeShortName,
+                        "yours" to yours,
+                        "title" to "${vehicle.routeShortName} to ${vehicle.headsign}" + if (yours) " (your bus)" else "",
+                    )
+                },
+            ),
+        )
+    }
+
+    DisposableEffect(handle.map) {
+        val map = handle.map ?: return@DisposableEffect onDispose { }
+        val clickListener = MapLibreMap.OnMapClickListener { latLng ->
+            val screenPoint = map.projection.toScreenLocation(latLng)
+            // Topmost first, so tapping the viewed stop under a bus names the stop's own marker order.
+            val hit = map.queryRenderedFeatures(screenPoint, SELECTED_LAYER, BUSES_LAYER, STOPS_LAYER).firstOrNull()
+            tappedLabel = hit?.getStringProperty("title")
+            hit != null
+        }
+        map.addOnMapClickListener(clickListener)
+        onDispose { map.removeOnMapClickListener(clickListener) }
+    }
 
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
@@ -117,50 +226,19 @@ fun RouteMapScreen(stop: Stop, arrival: Arrival, apiClient: TransitApiClient, on
             Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(16.dp))
         }
 
-        // osmdroid draws outside its own bounds, over the header above, unless clipped.
-        Box(modifier = Modifier.fillMaxSize().clipToBounds()) {
-            AndroidView(
-                modifier = Modifier.fillMaxSize().clipToBounds(),
-                factory = { mapView },
-                update = { map ->
-                    val data = state.data ?: return@AndroidView
-                    map.overlays.removeAll { it is Marker || it is Polyline }
-
-                    map.overlays.add(
-                        Polyline(map).apply {
-                            setPoints(data.shape.map { GeoPoint(it.lat, it.lon) })
-                            outlinePaint.color = ROUTE_LINE_COLOR
-                            outlinePaint.strokeWidth = 10f
-                        },
-                    )
-                    data.stops.filter { it.id != stop.id }.forEach { map.overlays.add(stopMarker(map, it, highlighted = false)) }
-
-                    state.vehicles.forEach { vehicle ->
-                        val yours = arrival.vehicleId != null && vehicle.vehicleId == arrival.vehicleId
-                        map.overlays.add(
-                            Marker(map).apply {
-                                position = GeoPoint(vehicle.position.lat, vehicle.position.lon)
-                                title = "${vehicle.routeShortName} to ${vehicle.headsign}" + if (yours) " (your bus)" else ""
-                                setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
-                                icon = labelIcon(map.context, vehicle.routeShortName, if (yours) YOUR_BUS_COLOR else OTHER_BUS_COLOR)
-                            },
-                        )
-                    }
-
-                    // Last, so a bus parked at the viewed stop can't hide it.
-                    map.overlays.add(stopMarker(map, stop, highlighted = true))
-
-                    if (!fitted[0] && data.shape.isNotEmpty()) {
-                        fitted[0] = true
-                        val box = BoundingBox.fromGeoPoints(data.shape.map { GeoPoint(it.lat, it.lon) })
-                        // zoomToBoundingBox needs a laid-out view, which this one may not be yet.
-                        map.post { map.zoomToBoundingBox(box, false, FIT_PADDING_PX) }
-                    }
-                    map.invalidate()
-                },
-            )
+        Box(modifier = Modifier.fillMaxSize()) {
+            AndroidView(modifier = Modifier.fillMaxSize(), factory = { handle.view })
             if (state.data == null && state.error == null) {
                 CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+            }
+            tappedLabel?.let {
+                Surface(
+                    modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp),
+                    shape = MaterialTheme.shapes.medium,
+                    shadowElevation = 4.dp,
+                ) {
+                    Text(it, modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp))
+                }
             }
         }
     }
@@ -185,47 +263,4 @@ private fun LegendItem(color: Color, label: String) {
         Box(modifier = Modifier.size(10.dp).background(color, CircleShape))
         Text(label, style = MaterialTheme.typography.bodySmall)
     }
-}
-
-private fun stopMarker(map: MapView, stop: Stop, highlighted: Boolean) = Marker(map).apply {
-    position = GeoPoint(stop.lat, stop.lon)
-    title = "${stop.name} (${stop.code})"
-    setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
-    icon = dotIcon(map.context, if (highlighted) THIS_STOP_COLOR else android.graphics.Color.WHITE, if (highlighted) 24 else 9, ROUTE_LINE_COLOR)
-}
-
-private fun dotIcon(context: Context, fill: Int, sizeDp: Int, stroke: Int): Drawable {
-    val density = context.resources.displayMetrics.density
-    val size = (sizeDp * density).toInt()
-    val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
-    val canvas = Canvas(bitmap)
-    val strokeWidth = 2 * density
-    val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-    paint.style = Paint.Style.FILL
-    paint.color = fill
-    canvas.drawCircle(size / 2f, size / 2f, size / 2f - strokeWidth, paint)
-    paint.style = Paint.Style.STROKE
-    paint.strokeWidth = strokeWidth
-    paint.color = stroke
-    canvas.drawCircle(size / 2f, size / 2f, size / 2f - strokeWidth, paint)
-    return BitmapDrawable(context.resources, bitmap)
-}
-
-/** A rounded label showing the route number, so a bus reads as a bus rather than a dot. */
-private fun labelIcon(context: Context, label: String, fill: Int): Drawable {
-    val density = context.resources.displayMetrics.density
-    val text = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = android.graphics.Color.WHITE
-        textSize = 12 * density
-        isFakeBoldText = true
-    }
-    val padding = 6 * density
-    val width = (text.measureText(label) + 2 * padding).toInt()
-    val height = (22 * density).toInt()
-    val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-    val canvas = Canvas(bitmap)
-    val background = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = fill }
-    canvas.drawRoundRect(RectF(0f, 0f, width.toFloat(), height.toFloat()), height / 2f, height / 2f, background)
-    canvas.drawText(label, padding, height / 2f - (text.ascent() + text.descent()) / 2f, text)
-    return BitmapDrawable(context.resources, bitmap)
 }

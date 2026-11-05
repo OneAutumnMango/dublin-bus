@@ -35,7 +35,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.core.ktx)
     implementation(libs.kotlinx.coroutines.android)
-    implementation(libs.osmdroid.android)
+    implementation(libs.maplibre.android)
     implementation(libs.glance.appwidget)
     implementation(libs.androidx.work.runtime.ktx)
 

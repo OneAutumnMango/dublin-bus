@@ -5,7 +5,6 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import dev.dublinbustracker.app.widget.WidgetRefreshWorker
-import org.osmdroid.config.Configuration
 import java.util.concurrent.TimeUnit
 
 class BusTrackerApp : Application() {
@@ -14,10 +13,6 @@ class BusTrackerApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
-        runCatching {
-            Configuration.getInstance().load(this, getSharedPreferences("osmdroid", MODE_PRIVATE))
-            Configuration.getInstance().userAgentValue = packageName
-        }
         container = AppContainer(this)
         scheduleWidgetRefresh()
     }

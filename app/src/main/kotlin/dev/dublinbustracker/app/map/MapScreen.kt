@@ -4,7 +4,6 @@ import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.pm.PackageManager
-import android.graphics.Point
 import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
@@ -26,10 +25,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -37,30 +38,43 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import dev.dublinbustracker.core.Stop
 import dev.dublinbustracker.data.TransitApiClient
-import org.osmdroid.events.MapListener
-import org.osmdroid.events.ScrollEvent
-import org.osmdroid.events.ZoomEvent
-import org.osmdroid.tileprovider.tilesource.TileSourceFactory
-import org.osmdroid.util.GeoPoint
-import org.osmdroid.views.MapView
-import org.osmdroid.views.overlay.CopyrightOverlay
-import org.osmdroid.views.overlay.Marker
+import org.maplibre.android.camera.CameraPosition
+import org.maplibre.android.camera.CameraUpdateFactory
+import org.maplibre.android.geometry.LatLng
+import org.maplibre.android.maps.MapLibreMap
+import org.maplibre.android.style.expressions.Expression
+import org.maplibre.android.style.layers.CircleLayer
+import org.maplibre.android.style.layers.PropertyFactory.circleColor
+import org.maplibre.android.style.layers.PropertyFactory.circleRadius
+import org.maplibre.android.style.layers.PropertyFactory.circleStrokeColor
+import org.maplibre.android.style.layers.PropertyFactory.circleStrokeWidth
+import org.maplibre.android.style.layers.PropertyFactory.textAllowOverlap
+import org.maplibre.android.style.layers.PropertyFactory.textColor
+import org.maplibre.android.style.layers.PropertyFactory.textField
+import org.maplibre.android.style.layers.PropertyFactory.textFont
+import org.maplibre.android.style.layers.PropertyFactory.textSize
+import org.maplibre.android.style.layers.SymbolLayer
+import org.maplibre.android.style.sources.GeoJsonOptions
+import org.maplibre.android.style.sources.GeoJsonSource
+import org.maplibre.geojson.Point
 
-private val DUBLIN_CITY_CENTRE = GeoPoint(53.3498, -6.2603)
+private val DUBLIN_CITY_CENTRE = LatLng(53.3498, -6.2603)
+// MapLibre zoom levels run one lower than the 256px-tile scale (osmdroid, web maps) most references use.
+private const val DEFAULT_ZOOM = 14.0
+private const val MY_LOCATION_ZOOM = 16.0
 
-// Stops at city-wide zoom otherwise render as 100+ overlapping pins. Markers whose screen
-// positions land within this many pixels of each other are merged into one numbered pin.
-private const val STOP_CLUSTER_RADIUS_PX = 60
+private const val BUS_ORANGE = 0xFFEF6C00.toInt()
 
-private const val MY_LOCATION_ZOOM = 17.0
+private const val STOPS_SOURCE = "stops"
+private const val CLUSTER_LAYER = "stop-clusters"
+private const val STOP_LAYER = "stop-points"
+private const val BUSES_SOURCE = "buses"
+private const val BUS_CIRCLE_LAYER = "bus-circles"
 
 @Composable
 fun MapScreen(apiClient: TransitApiClient, onStopSelected: (Stop) -> Unit) {
@@ -69,60 +83,126 @@ fun MapScreen(apiClient: TransitApiClient, onStopSelected: (Stop) -> Unit) {
     )
     val state by viewModel.uiState.collectAsState()
     val showBuses by viewModel.showBuses.collectAsState()
-    val lifecycleOwner = LocalLifecycleOwner.current
     val context = LocalContext.current
+    val handle = rememberMapHandle()
+    val latestStops by rememberUpdatedState(state.stops)
+    val latestOnStopSelected by rememberUpdatedState(onStopSelected)
 
-    val mapView = remember {
-        MapView(context).apply {
-            // Every free "nicer-looking" raster provider (CARTO, Wikimedia, Stadia/Stamen,
-            // Thunderforest, MapTiler) now gates tiles behind a signup/API key - confirmed live,
-            // not assumed; see the commit message. Mapnik remains the one genuinely free,
-            // unauthenticated option, so that's the baseline until an API key is wired in.
-            setTileSource(TileSourceFactory.MAPNIK)
-            setMultiTouchControls(true)
-            controller.setZoom(15.0)
-            controller.setCenter(DUBLIN_CITY_CENTRE)
-            overlays.add(CopyrightOverlay(context))
-        }
-    }
     var pendingLocationRequest by remember { mutableStateOf(false) }
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { granted ->
-        if (granted && pendingLocationRequest) seekToCurrentLocation(context, mapView)
+        if (granted && pendingLocationRequest) handle.map?.let { seekToCurrentLocation(context, it) }
         pendingLocationRequest = false
     }
 
-    DisposableEffect(lifecycleOwner, mapView) {
-        val observer = LifecycleEventObserver { _, event ->
-            when (event) {
-                Lifecycle.Event.ON_RESUME -> mapView.onResume()
-                Lifecycle.Event.ON_PAUSE -> mapView.onPause()
-                else -> Unit
-            }
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose {
-            lifecycleOwner.lifecycle.removeObserver(observer)
-            mapView.onDetach()
-        }
+    // Layers are added once per loaded style; the data pushed into them below changes freely.
+    LaunchedEffect(handle.style) {
+        val style = handle.style ?: return@LaunchedEffect
+        handle.map?.cameraPosition = CameraPosition.Builder().target(DUBLIN_CITY_CENTRE).zoom(DEFAULT_ZOOM).build()
+
+        style.addSource(
+            GeoJsonSource(
+                STOPS_SOURCE,
+                collectionOf(emptyList()),
+                GeoJsonOptions().withCluster(true).withClusterRadius(50).withClusterMaxZoom(15),
+            ),
+        )
+        style.addLayer(
+            CircleLayer(CLUSTER_LAYER, STOPS_SOURCE).withFilter(Expression.has("point_count")).withProperties(
+                circleColor(MAP_BLUE),
+                circleStrokeColor(android.graphics.Color.WHITE),
+                circleStrokeWidth(2f),
+                circleRadius(
+                    Expression.step(
+                        Expression.get("point_count"),
+                        Expression.literal(14),
+                        Expression.stop(10, Expression.literal(18)),
+                        Expression.stop(50, Expression.literal(24)),
+                    ),
+                ),
+            ),
+        )
+        style.addLayer(
+            SymbolLayer("stop-cluster-count", STOPS_SOURCE).withFilter(Expression.has("point_count")).withProperties(
+                textField(Expression.get("point_count_abbreviated")),
+                textFont(MAP_BOLD_FONT),
+                textSize(12f),
+                textColor(android.graphics.Color.WHITE),
+                textAllowOverlap(true),
+            ),
+        )
+        style.addLayer(
+            CircleLayer(STOP_LAYER, STOPS_SOURCE).withFilter(Expression.not(Expression.has("point_count"))).withProperties(
+                circleColor(android.graphics.Color.WHITE),
+                circleStrokeColor(MAP_BLUE),
+                circleStrokeWidth(2.5f),
+                circleRadius(7f),
+            ),
+        )
+
+        style.addSource(GeoJsonSource(BUSES_SOURCE, collectionOf(emptyList())))
+        style.addLayer(
+            CircleLayer(BUS_CIRCLE_LAYER, BUSES_SOURCE).withProperties(
+                circleColor(BUS_ORANGE),
+                circleStrokeColor(android.graphics.Color.WHITE),
+                circleStrokeWidth(2f),
+                circleRadius(15f),
+            ),
+        )
+        style.addLayer(
+            SymbolLayer("bus-labels", BUSES_SOURCE).withProperties(
+                textField(Expression.get("label")),
+                textFont(MAP_BOLD_FONT),
+                textSize(11f),
+                textColor(android.graphics.Color.WHITE),
+                textAllowOverlap(true),
+            ),
+        )
     }
 
-    DisposableEffect(mapView) {
-        val listener = object : MapListener {
-            override fun onScroll(event: ScrollEvent?): Boolean {
-                viewModel.onViewportChanged(mapView.currentViewport())
-                return false
-            }
+    LaunchedEffect(handle.style, state.stops) {
+        handle.style?.getSourceAs<GeoJsonSource>(STOPS_SOURCE)?.setGeoJson(
+            collectionOf(state.stops.map { featureAt(it.lat, it.lon, "id" to it.id) }),
+        )
+    }
+    LaunchedEffect(handle.style, state.vehicles) {
+        handle.style?.getSourceAs<GeoJsonSource>(BUSES_SOURCE)?.setGeoJson(
+            collectionOf(
+                state.vehicles.map {
+                    featureAt(it.position.lat, it.position.lon, "label" to it.routeShortName)
+                },
+            ),
+        )
+    }
 
-            override fun onZoom(event: ZoomEvent?): Boolean {
-                viewModel.onViewportChanged(mapView.currentViewport())
-                return false
+    DisposableEffect(handle.map) {
+        val map = handle.map ?: return@DisposableEffect onDispose { }
+        val idleListener = MapLibreMap.OnCameraIdleListener { viewModel.onViewportChanged(map.currentViewport()) }
+        val clickListener = MapLibreMap.OnMapClickListener { latLng ->
+            val screenPoint = map.projection.toScreenLocation(latLng)
+            val hit = map.queryRenderedFeatures(screenPoint, CLUSTER_LAYER, STOP_LAYER).firstOrNull()
+                ?: return@OnMapClickListener false
+            val point = hit.geometry() as? Point ?: return@OnMapClickListener false
+            val stopId = hit.getStringProperty("id")
+            if (stopId == null) {
+                // A cluster: zoom in on it rather than opening anything.
+                map.animateCamera(
+                    CameraUpdateFactory.newLatLngZoom(LatLng(point.latitude(), point.longitude()), map.cameraPosition.zoom + 2),
+                    300,
+                )
+            } else {
+                latestStops.firstOrNull { it.id == stopId }?.let(latestOnStopSelected)
             }
+            true
         }
-        mapView.addMapListener(listener)
-        viewModel.onViewportChanged(mapView.currentViewport())
-        onDispose { mapView.removeMapListener(listener) }
+        map.addOnCameraIdleListener(idleListener)
+        map.addOnMapClickListener(clickListener)
+        viewModel.onViewportChanged(map.currentViewport())
+        onDispose {
+            map.removeOnCameraIdleListener(idleListener)
+            map.removeOnMapClickListener(clickListener)
+        }
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -144,49 +224,7 @@ fun MapScreen(apiClient: TransitApiClient, onStopSelected: (Stop) -> Unit) {
         }
 
         Box(modifier = Modifier.fillMaxSize()) {
-            AndroidView(
-                modifier = Modifier.fillMaxSize(),
-                factory = { mapView },
-                update = { map ->
-                    map.overlays.removeAll { it is Marker }
-
-                    clusterStops(map, state.stops).forEach { cluster ->
-                        val anchor = cluster.first()
-                        map.overlays.add(
-                            Marker(map).apply {
-                                position = GeoPoint(anchor.lat, anchor.lon)
-                                setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-                                if (cluster.size == 1) {
-                                    title = "${anchor.name} (${anchor.code})"
-                                    setOnMarkerClickListener { _, _ -> onStopSelected(anchor); true }
-                                } else {
-                                    title = "${cluster.size} stops"
-                                    setTextIcon(cluster.size.toString())
-                                    setOnMarkerClickListener { _, markerMap ->
-                                        markerMap.controller.animateTo(
-                                            position,
-                                            (markerMap.zoomLevelDouble + 2).coerceAtMost(20.0),
-                                            300L,
-                                        )
-                                        true
-                                    }
-                                }
-                            },
-                        )
-                    }
-
-                    state.vehicles.forEach { vehicle ->
-                        map.overlays.add(
-                            Marker(map).apply {
-                                position = GeoPoint(vehicle.position.lat, vehicle.position.lon)
-                                title = "${vehicle.routeShortName} to ${vehicle.headsign}"
-                                setTextIcon(vehicle.routeShortName)
-                            },
-                        )
-                    }
-                    map.invalidate()
-                },
-            )
+            AndroidView(modifier = Modifier.fillMaxSize(), factory = { handle.view })
 
             if (state.loading) {
                 CircularProgressIndicator(modifier = Modifier.align(Alignment.TopEnd).padding(16.dp))
@@ -199,7 +237,7 @@ fun MapScreen(apiClient: TransitApiClient, onStopSelected: (Stop) -> Unit) {
                         Manifest.permission.ACCESS_FINE_LOCATION,
                     ) == PackageManager.PERMISSION_GRANTED
                     if (hasPermission) {
-                        seekToCurrentLocation(context, mapView)
+                        handle.map?.let { seekToCurrentLocation(context, it) }
                     } else {
                         pendingLocationRequest = true
                         locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
@@ -216,10 +254,13 @@ fun MapScreen(apiClient: TransitApiClient, onStopSelected: (Stop) -> Unit) {
 /** Centres the map on the device's current location, requesting one fresh fix if there's no
  * recent one cached. Caller must already hold ACCESS_FINE_LOCATION or ACCESS_COARSE_LOCATION. */
 @SuppressLint("MissingPermission")
-private fun seekToCurrentLocation(context: Context, mapView: MapView) {
+private fun seekToCurrentLocation(context: Context, map: MapLibreMap) {
     val locationManager = context.getSystemService(LocationManager::class.java) ?: return
     val onFix: (Location) -> Unit = { location ->
-        mapView.controller.animateTo(GeoPoint(location.latitude, location.longitude), MY_LOCATION_ZOOM, 500L)
+        map.animateCamera(
+            CameraUpdateFactory.newLatLngZoom(LatLng(location.latitude, location.longitude), MY_LOCATION_ZOOM),
+            500,
+        )
     }
 
     val providers = listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)
@@ -247,40 +288,15 @@ private fun seekToCurrentLocation(context: Context, mapView: MapView) {
     )
 }
 
-/** Groups stops whose current screen positions are within [STOP_CLUSTER_RADIUS_PX] of each other. */
-private fun clusterStops(map: MapView, stops: List<Stop>): List<List<Stop>> {
-    val projection = map.projection
-    val clusters = mutableListOf<MutableList<Stop>>()
-    val clusterPoints = mutableListOf<Point>()
-    val radiusSquared = STOP_CLUSTER_RADIUS_PX * STOP_CLUSTER_RADIUS_PX
-
-    stops.forEach { stop ->
-        val point = Point()
-        projection.toPixels(GeoPoint(stop.lat, stop.lon), point)
-        val existingIndex = clusterPoints.indexOfFirst { existing ->
-            val dx = existing.x - point.x
-            val dy = existing.y - point.y
-            dx * dx + dy * dy < radiusSquared
-        }
-        if (existingIndex >= 0) {
-            clusters[existingIndex].add(stop)
-        } else {
-            clusters.add(mutableListOf(stop))
-            clusterPoints.add(point)
-        }
-    }
-    return clusters
-}
-
-private fun MapView.currentViewport(): Viewport {
-    val box = boundingBox
+private fun MapLibreMap.currentViewport(): Viewport {
+    val bounds = projection.visibleRegion.latLngBounds
     return Viewport(
-        centerLat = box.centerLatitude,
-        centerLon = box.centerLongitude,
-        radiusMeters = (box.diagonalLengthInMeters / 2).toInt().coerceAtLeast(200),
-        minLat = box.actualSouth,
-        minLon = box.lonWest,
-        maxLat = box.actualNorth,
-        maxLon = box.lonEast,
+        centerLat = bounds.center.latitude,
+        centerLon = bounds.center.longitude,
+        radiusMeters = (bounds.northEast.distanceTo(bounds.southWest) / 2).toInt().coerceAtLeast(200),
+        minLat = bounds.latitudeSouth,
+        minLon = bounds.longitudeWest,
+        maxLat = bounds.latitudeNorth,
+        maxLon = bounds.longitudeEast,
     )
 }

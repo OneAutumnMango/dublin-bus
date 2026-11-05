@@ -57,8 +57,10 @@ picker, then it shows that stop's next arrivals. Tap Refresh on the widget for a
 update; Android otherwise only allows background refreshes every ~30 minutes.
 
 ### Map
-OpenStreetMap tiles via osmdroid — no API key needed. Stops load for whatever area you're
-looking at, and "Show buses" overlays live vehicle positions for that viewport.
+A vector map (MapLibre) styled with OpenFreeMap's "positron" - free, no API key. Stops load for
+whatever area you're looking at (clustered when zoomed out), and "Show buses" overlays live
+vehicle positions for that viewport. Tapping an arrival on a stop's screen opens that trip's
+route: the path, every stop along it, the stop you're viewing highlighted, and the buses running it.
 
 ## Notes
 - The app carries no timetable data of its own: stop search, nearby stops, arrivals and vehicle
