@@ -153,7 +153,7 @@ private fun ArrivalRow(arrival: Arrival, onClick: () -> Unit) {
     ) {
         Text(
             shown.headline,
-            style = MaterialTheme.typography.titleLarge,
+            style = MaterialTheme.typography.bodyLarge,
             fontWeight = FontWeight.Bold,
             modifier = Modifier.width(ARRIVAL_HEADLINE_WIDTH),
         )
@@ -178,4 +178,4 @@ private fun ArrivalRow(arrival: Arrival, onClick: () -> Unit) {
     }
 }
 
-private val ARRIVAL_HEADLINE_WIDTH = 96.dp
+private val ARRIVAL_HEADLINE_WIDTH = 80.dp
