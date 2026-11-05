@@ -62,6 +62,10 @@ whatever area you're looking at (clustered when zoomed out), and "Show buses" ov
 vehicle positions for that viewport. Tapping an arrival on a stop's screen opens that trip's
 route: the path, every stop along it, the stop you're viewing highlighted, and the buses running it.
 
+Dublin is downloaded for offline use on first launch. Settings > Offline maps lists what's stored
+and lets you add more: pick Cork, Galway, Limerick or Waterford, or fit any area inside the frame
+on the map, and it shows the size before you download. Delete areas there too.
+
 ## Notes
 - The app carries no timetable data of its own: stop search, nearby stops, arrivals and vehicle
   positions are all server queries. Without a reachable server the screens show an error

@@ -23,6 +23,7 @@ import dev.dublinbustracker.app.favourites.FavouritesScreen
 import dev.dublinbustracker.app.map.MapScreen
 import dev.dublinbustracker.app.route.RouteMapScreen
 import dev.dublinbustracker.app.search.SearchScreen
+import dev.dublinbustracker.app.settings.ChooseAreaScreen
 import dev.dublinbustracker.app.settings.SettingsScreen
 import dev.dublinbustracker.core.Arrival
 import dev.dublinbustracker.core.Stop
@@ -59,10 +60,12 @@ private fun AppRoot(container: AppContainer) {
     var selectedStop by remember { mutableStateOf<Stop?>(null) }
 
     var routeMapArrival by remember { mutableStateOf<Arrival?>(null) }
+    var choosingMapArea by remember { mutableStateOf(false) }
 
     val stop = selectedStop
     val mapArrival = routeMapArrival
     when {
+        choosingMapArea -> ChooseAreaScreen(onBack = { choosingMapArea = false })
         stop != null && mapArrival != null -> RouteMapScreen(
             stop = stop,
             arrival = mapArrival,
@@ -94,7 +97,7 @@ private fun AppRoot(container: AppContainer) {
                     container.favouritesRepository,
                     onStopSelected = { selectedStop = it },
                 )
-                AppTab.SETTINGS -> SettingsScreen(container.settingsRepository, container.apiClient)
+                AppTab.SETTINGS -> SettingsScreen(container.settingsRepository, container.apiClient, onChooseArea = { choosingMapArea = true })
             }
         }
     }

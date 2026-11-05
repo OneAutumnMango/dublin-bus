@@ -35,7 +35,7 @@ import dev.dublinbustracker.data.ServerSettingsRepository
 import dev.dublinbustracker.data.TransitApiClient
 
 @Composable
-fun SettingsScreen(settingsRepository: ServerSettingsRepository, apiClient: TransitApiClient) {
+fun SettingsScreen(settingsRepository: ServerSettingsRepository, apiClient: TransitApiClient, onChooseArea: () -> Unit) {
     val viewModel = viewModel<SettingsViewModel>(
         factory = viewModelFactory { initializer { SettingsViewModel(settingsRepository, apiClient) } },
     )
@@ -128,5 +128,9 @@ fun SettingsScreen(settingsRepository: ServerSettingsRepository, apiClient: Tran
             is ConnectionTest.Success -> Text(test.summary, color = MaterialTheme.colorScheme.primary)
             is ConnectionTest.Failure -> Text(test.message, color = MaterialTheme.colorScheme.error)
         }
+
+        HorizontalDivider()
+
+        OfflineMapsSection(onChooseArea)
     }
 }
