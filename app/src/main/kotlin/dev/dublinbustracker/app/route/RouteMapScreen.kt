@@ -1,5 +1,9 @@
 package dev.dublinbustracker.app.route
 
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.Path
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -32,6 +36,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import dev.dublinbustracker.app.bus.BusInfoSheet
 import dev.dublinbustracker.app.map.MAP_BLUE
 import dev.dublinbustracker.app.map.MAP_BOLD_FONT
 import dev.dublinbustracker.app.map.collectionOf
@@ -54,7 +59,12 @@ import org.maplibre.android.style.layers.PropertyFactory.circleStrokeWidth
 import org.maplibre.android.style.layers.PropertyFactory.lineCap
 import org.maplibre.android.style.layers.PropertyFactory.lineColor
 import org.maplibre.android.style.layers.PropertyFactory.lineJoin
+import org.maplibre.android.style.layers.PropertyFactory.iconAllowOverlap
+import org.maplibre.android.style.layers.PropertyFactory.iconIgnorePlacement
+import org.maplibre.android.style.layers.PropertyFactory.iconImage
 import org.maplibre.android.style.layers.PropertyFactory.lineWidth
+import org.maplibre.android.style.layers.PropertyFactory.symbolPlacement
+import org.maplibre.android.style.layers.PropertyFactory.symbolSpacing
 import org.maplibre.android.style.layers.PropertyFactory.textAllowOverlap
 import org.maplibre.android.style.layers.PropertyFactory.textColor
 import org.maplibre.android.style.layers.PropertyFactory.textField
@@ -71,8 +81,10 @@ private const val THIS_STOP_COLOR = 0xFFD32F2F.toInt()
 private const val YOUR_BUS_COLOR = 0xFF2E7D32.toInt()
 private const val OTHER_BUS_COLOR = 0xFFEF6C00.toInt()
 private const val FIT_PADDING_PX = 80
+private const val ARROW_COLOR = 0xFF0D47A1.toInt()
 private const val STOPS_MIN_ZOOM = 11f
 
+private const val ARROW_IMAGE = "route-arrow"
 private const val LINE_SOURCE = "route-line"
 private const val STOPS_SOURCE = "route-stops"
 private const val SELECTED_SOURCE = "route-selected"
@@ -103,6 +115,7 @@ fun RouteMapScreen(stop: Stop, arrival: Arrival, apiClient: TransitApiClient, on
     val state by viewModel.uiState.collectAsState()
     val handle = rememberMapHandle()
     var tappedLabel by remember { mutableStateOf<String?>(null) }
+    var infoTripId by remember { mutableStateOf<String?>(null) }
 
     BackHandler(onBack = onBack)
 
@@ -115,12 +128,23 @@ fun RouteMapScreen(stop: Stop, arrival: Arrival, apiClient: TransitApiClient, on
         }
         style.addLayer(
             LineLayer("route-casing", LINE_SOURCE).withProperties(
-                lineColor(android.graphics.Color.WHITE), lineWidth(zoomScaled(5f, 10f)), lineCap(Property.LINE_CAP_ROUND), lineJoin(Property.LINE_JOIN_ROUND),
+                lineColor(android.graphics.Color.WHITE), lineWidth(zoomScaled(6f, 11f)), lineCap(Property.LINE_CAP_ROUND), lineJoin(Property.LINE_JOIN_ROUND),
             ),
         )
         style.addLayer(
             LineLayer("route-path", LINE_SOURCE).withProperties(
-                lineColor(MAP_BLUE), lineWidth(zoomScaled(3f, 6f)), lineCap(Property.LINE_CAP_ROUND), lineJoin(Property.LINE_JOIN_ROUND),
+                lineColor(MAP_BLUE), lineWidth(zoomScaled(4f, 7f)), lineCap(Property.LINE_CAP_ROUND), lineJoin(Property.LINE_JOIN_ROUND),
+            ),
+        )
+        // Chevrons along the path so the direction of travel reads at a glance.
+        style.addImage(ARROW_IMAGE, arrowBitmap(handle.view.resources.displayMetrics.density))
+        style.addLayer(
+            SymbolLayer("route-arrows", LINE_SOURCE).withProperties(
+                symbolPlacement(Property.SYMBOL_PLACEMENT_LINE),
+                symbolSpacing(70f),
+                iconImage(ARROW_IMAGE),
+                iconAllowOverlap(true),
+                iconIgnorePlacement(true),
             ),
         )
         // On a long route the stops overlap into a solid smear that hides the path itself, so they only appear once zoomed in.
@@ -188,6 +212,7 @@ fun RouteMapScreen(stop: Stop, arrival: Arrival, apiClient: TransitApiClient, on
                         vehicle.position.lon,
                         "label" to vehicle.routeShortName,
                         "yours" to yours,
+                        "tripId" to vehicle.tripId,
                         "title" to "${vehicle.routeShortName} to ${vehicle.headsign}" + if (yours) " (your bus)" else "",
                     )
                 },
@@ -201,7 +226,13 @@ fun RouteMapScreen(stop: Stop, arrival: Arrival, apiClient: TransitApiClient, on
             val screenPoint = map.projection.toScreenLocation(latLng)
             // Topmost first, so tapping the viewed stop under a bus names the stop's own marker order.
             val hit = map.queryRenderedFeatures(screenPoint, SELECTED_LAYER, BUSES_LAYER, STOPS_LAYER).firstOrNull()
-            tappedLabel = hit?.getStringProperty("title")
+            val busTripId = hit?.getStringProperty("tripId")?.takeIf { it.isNotEmpty() }
+            if (busTripId != null) {
+                infoTripId = busTripId
+                tappedLabel = null
+            } else {
+                tappedLabel = hit?.getStringProperty("title")
+            }
             hit != null
         }
         map.addOnMapClickListener(clickListener)
@@ -242,6 +273,17 @@ fun RouteMapScreen(stop: Stop, arrival: Arrival, apiClient: TransitApiClient, on
             }
         }
     }
+
+    infoTripId?.let { tripId ->
+        BusInfoSheet(
+            tripId = tripId,
+            contextStop = stop,
+            arrival = arrival.takeIf { it.tripId == tripId },
+            apiClient = apiClient,
+            onViewOnMap = null, // already on the map
+            onDismiss = { infoTripId = null },
+        )
+    }
 }
 
 @Composable
@@ -263,4 +305,29 @@ private fun LegendItem(color: Color, label: String) {
         Box(modifier = Modifier.size(10.dp).background(color, CircleShape))
         Text(label, style = MaterialTheme.typography.bodySmall)
     }
+}
+
+private fun arrowBitmap(density: Float): Bitmap {
+    val size = (18 * density).toInt()
+    val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+    val path = Path().apply {
+        moveTo(size * 0.2f, size * 0.15f)
+        lineTo(size * 0.85f, size * 0.5f)
+        lineTo(size * 0.2f, size * 0.85f)
+        lineTo(size * 0.4f, size * 0.5f)
+        close()
+    }
+    val canvas = Canvas(bitmap)
+    // White outline first, so the blue arrow reads against both the path and the pale map.
+    canvas.drawPath(
+        path,
+        Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = android.graphics.Color.WHITE
+            style = Paint.Style.STROKE
+            strokeWidth = 3 * density
+            strokeJoin = Paint.Join.ROUND
+        },
+    )
+    canvas.drawPath(path, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = ARROW_COLOR })
+    return bitmap
 }

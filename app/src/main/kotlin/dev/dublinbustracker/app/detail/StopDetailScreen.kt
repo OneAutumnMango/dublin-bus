@@ -47,6 +47,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import dev.dublinbustracker.app.bus.BusInfoSheet
 import dev.dublinbustracker.app.favourites.FavouriteStarButton
 import dev.dublinbustracker.core.Arrival
 import dev.dublinbustracker.core.Stop
@@ -74,6 +75,7 @@ fun StopDetailScreen(
     val routeFilter by viewModel.routeFilter.collectAsState()
     val favouriteIds by favouritesRepository.favouriteIds.collectAsState()
 
+    var infoArrival by remember { mutableStateOf<Arrival?>(null) }
     var autoRefresh by remember { mutableStateOf(true) }
     LaunchedEffect(initialStop.id, autoRefresh) {
         while (autoRefresh) {
@@ -152,7 +154,7 @@ fun StopDetailScreen(
                         item { Text("No upcoming arrivals", modifier = Modifier.padding(top = 8.dp)) }
                     } else {
                         items(state.arrivals) { arrival ->
-                            ArrivalRow(arrival, onClick = { onViewRoute(arrival) })
+                            ArrivalRow(arrival, onClick = { infoArrival = arrival }, onViewMap = { onViewRoute(arrival) })
                             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                         }
                     }
@@ -160,11 +162,22 @@ fun StopDetailScreen(
             }
         }
     }
+
+    infoArrival?.let { shown ->
+        BusInfoSheet(
+            tripId = shown.tripId,
+            contextStop = stop,
+            arrival = shown,
+            apiClient = apiClient,
+            onViewOnMap = { infoArrival = null; onViewRoute(shown) },
+            onDismiss = { infoArrival = null },
+        )
+    }
 }
 
 /** One compact line-pair per bus: the time it's due in large type, then where it's going and how late. */
 @Composable
-private fun ArrivalRow(arrival: Arrival, onClick: () -> Unit) {
+private fun ArrivalRow(arrival: Arrival, onClick: () -> Unit, onViewMap: () -> Unit) {
     val shown = arrival.display(System.currentTimeMillis() / 1000, ZoneId.systemDefault())
     Row(
         modifier = Modifier
@@ -193,12 +206,10 @@ private fun ArrivalRow(arrival: Arrival, onClick: () -> Unit) {
                 )
             }
         }
-        Icon(
-            Icons.Filled.Map,
-            contentDescription = "Route map",
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(start = 8.dp),
-        )
+        // A shortcut straight to the map; tapping the row itself opens the bus's details.
+        IconButton(onClick = onViewMap) {
+            Icon(Icons.Filled.Map, contentDescription = "View route on map", tint = MaterialTheme.colorScheme.primary)
+        }
     }
 }
 
