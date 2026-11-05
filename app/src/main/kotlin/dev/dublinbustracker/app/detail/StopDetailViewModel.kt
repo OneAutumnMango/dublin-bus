@@ -34,12 +34,14 @@ class StopDetailViewModel(
 
     fun setRouteFilter(route: String?) {
         _routeFilter.value = route
+        _uiState.value = ArrivalsUiState.Loading
         refresh()
     }
 
     fun refresh() {
         viewModelScope.launch {
-            _uiState.value = ArrivalsUiState.Loading
+            // Keep showing the current list while a refresh is in flight, rather than flashing a spinner.
+            if (_uiState.value !is ArrivalsUiState.Loaded) _uiState.value = ArrivalsUiState.Loading
             _uiState.value = runCatching { apiClient.arrivals(stopId, _routeFilter.value) }.fold(
                 onSuccess = { ArrivalsUiState.Loaded(it) },
                 onFailure = { ArrivalsUiState.Error(it.message ?: "Failed to load arrivals") },

@@ -12,6 +12,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.ListItem
@@ -22,7 +23,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
@@ -30,9 +36,11 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import dev.dublinbustracker.app.favourites.FavouriteStarButton
 import dev.dublinbustracker.core.Arrival
 import dev.dublinbustracker.core.Stop
+import dev.dublinbustracker.core.display
 import dev.dublinbustracker.data.FavouritesRepository
 import dev.dublinbustracker.data.TransitApiClient
 import kotlinx.coroutines.delay
+import java.time.ZoneId
 
 @Composable
 fun StopDetailScreen(
@@ -50,8 +58,9 @@ fun StopDetailScreen(
     val routeFilter by viewModel.routeFilter.collectAsState()
     val favouriteIds by favouritesRepository.favouriteIds.collectAsState()
 
-    LaunchedEffect(stop.id) {
-        while (true) {
+    var autoRefresh by remember { mutableStateOf(true) }
+    LaunchedEffect(stop.id, autoRefresh) {
+        while (autoRefresh) {
             delay(ARRIVALS_REFRESH_INTERVAL_MS)
             viewModel.refresh()
         }
@@ -92,7 +101,12 @@ fun StopDetailScreen(
             }
         }
 
-        Button(onClick = viewModel::refresh, modifier = Modifier.padding(vertical = 8.dp)) { Text("Refresh") }
+        Row(modifier = Modifier.padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = viewModel::refresh) { Text("Refresh") }
+            OutlinedButton(onClick = { autoRefresh = !autoRefresh }) {
+                Text(if (autoRefresh) "Pause auto-refresh" else "Resume auto-refresh")
+            }
+        }
 
         when (val state = uiState) {
             is ArrivalsUiState.Loading -> CircularProgressIndicator()
@@ -110,24 +124,17 @@ fun StopDetailScreen(
 
 @Composable
 private fun ArrivalRow(arrival: Arrival, onClick: () -> Unit) {
+    val shown = arrival.display(System.currentTimeMillis() / 1000, ZoneId.systemDefault())
     ListItem(
-        modifier = Modifier.clickable(onClick = onClick),
-        headlineContent = { Text("${arrival.routeShortName}  ${arrival.destination}") },
-        supportingContent = { Text(dueText(arrival)) },
+        // Greyed when the bus may already have gone.
+        modifier = Modifier.clickable(onClick = onClick).alpha(if (shown.muted) 0.5f else 1f),
+        headlineContent = { Text(shown.headline, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold) },
+        supportingContent = {
+            Column {
+                Text(shown.destinationLine, style = MaterialTheme.typography.bodyMedium)
+                if (shown.detailLine.isNotEmpty()) Text(shown.detailLine, style = MaterialTheme.typography.bodySmall)
+            }
+        },
         trailingContent = { Text("Route map", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium) },
     )
-}
-
-private fun dueText(arrival: Arrival): String {
-    val due = if (arrival.dueMinutes <= 0) "Due now" else "Due in ${arrival.dueMinutes} min"
-    // No live update for this trip yet (e.g. it hasn't left its terminus) - this is the static
-    // timetable's time, not a tracked prediction, so it's labelled differently from the rest.
-    if (!arrival.isRealtime) return "$due (scheduled)"
-    val delay = arrival.delaySeconds ?: return due
-    val minutes = delay / 60
-    return when {
-        minutes >= 1 -> "$due · $minutes min late"
-        minutes <= -1 -> "$due · ${-minutes} min early"
-        else -> "$due · on time"
-    }
 }
