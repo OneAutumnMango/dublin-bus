@@ -38,6 +38,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import dev.dublinbustracker.app.bus.BusInfoSheet
 import dev.dublinbustracker.app.map.MAP_BLUE
+import dev.dublinbustracker.app.map.MapCompass
 import dev.dublinbustracker.app.map.MAP_BOLD_FONT
 import dev.dublinbustracker.app.map.collectionOf
 import dev.dublinbustracker.app.map.featureAt
@@ -262,6 +263,7 @@ fun RouteMapScreen(stop: Stop, arrival: Arrival, apiClient: TransitApiClient, on
             if (state.data == null && state.error == null) {
                 CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
             }
+            MapCompass(handle, modifier = Modifier.align(Alignment.TopEnd).padding(12.dp))
             tappedLabel?.let {
                 Surface(
                     modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp),

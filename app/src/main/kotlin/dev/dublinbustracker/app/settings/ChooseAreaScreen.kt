@@ -71,6 +71,8 @@ fun ChooseAreaScreen(onBack: () -> Unit) {
         if (handle.style == null) return@LaunchedEffect
         val dublin = AREA_PRESETS.first { it.name == "Dublin" }
         handle.map?.cameraPosition = CameraPosition.Builder().target(LatLng(53.35, -6.26)).zoom(9.0).build()
+        // A turned map would make the frame's corners a tilted box, so keep it facing north here.
+        handle.map?.uiSettings?.isRotateGesturesEnabled = false
         name = dublin.name
         handle.map?.let { bounds = it.frameBounds(handle.view, insetPx) }
     }
