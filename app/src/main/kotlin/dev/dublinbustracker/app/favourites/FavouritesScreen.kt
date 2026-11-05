@@ -34,9 +34,12 @@ import dev.dublinbustracker.app.location.requestCurrentLocation
 import dev.dublinbustracker.core.LatLon
 import dev.dublinbustracker.core.Stop
 import dev.dublinbustracker.core.distanceText
+import dev.dublinbustracker.core.headingsText
 import dev.dublinbustracker.core.sortedByDistance
 import dev.dublinbustracker.data.FavouritesRepository
 import dev.dublinbustracker.data.TransitApiClient
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 
 private const val PREFS = "favourites_ui"
 private const val NEAREST_FIRST = "nearest_first"
@@ -91,11 +94,19 @@ fun FavouritesScreen(
         if (granted) locate() else permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
     }
 
-    // Entries migrated from the old id-only format have no name until the server fills them in.
+    // Each visit asks the server for every favourite's current details: a name for entries from the
+    // old id-only format, and which way its routes head (which can be corrected server-side).
+    // Each stop is asked once per visit. Every change republishes the list and so restarts this
+    // effect, which is why a stop only counts as asked once its request is done - a restart picks
+    // up the rest.
+    val asked = remember { mutableSetOf<String>() }
     LaunchedEffect(favourites) {
-        favourites.filter { it.needsDetails }.forEach { favourite ->
-            runCatching { apiClient.stop(favourite.id) }
-                .onSuccess { favouritesRepository.updateDetails(it) }
+        favourites.filter { it.id !in asked }.forEach { favourite ->
+            val stop = runCatching { apiClient.stop(favourite.id) }.getOrNull()
+            // runCatching swallows cancellation too; without this a restart would mark a stop as asked that never was.
+            currentCoroutineContext().ensureActive()
+            asked += favourite.id
+            if (stop != null) favouritesRepository.updateDetails(stop)
         }
     }
 
@@ -133,7 +144,17 @@ fun FavouritesScreen(
                 ListItem(
                     headlineContent = { Text(favourite.name.ifBlank { favourite.id }) },
                     supportingContent = {
-                        Text(listOfNotNull("Stop ${favourite.code.ifBlank { "-" }}", meters?.let(::distanceText)).joinToString(" · "))
+                        Column {
+                            Text(listOfNotNull("Stop ${favourite.code.ifBlank { "-" }}", meters?.let(::distanceText)).joinToString(" · "))
+                            if (favourite.headings.isNotEmpty()) {
+                                // e.g. "4 (W)  L25 (W)  L27 (SW)": each bus number and the way it goes from this stop.
+                                Text(
+                                    headingsText(favourite.toStop().headings),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
                     },
                     trailingContent = {
                         FavouriteStarButton(isFavourite = true, onToggle = { favouritesRepository.remove(favourite.id) })
