@@ -71,6 +71,6 @@ class ArrivalDisplayTest {
 
         assertTrue(shown.muted)
         assertEquals("Due", shown.headline)
-        assertEquals("May already have passed · was due 5 min ago · 4 min late", shown.detailLine)
+        assertEquals("May have left · was due 5 min ago", shown.detailLine)
     }
 }

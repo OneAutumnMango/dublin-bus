@@ -21,10 +21,9 @@ private val CLOCK_FORMAT = DateTimeFormatter.ofPattern("HH:mm")
 fun Arrival.display(nowEpochSeconds: Long, zone: ZoneId): ArrivalDisplay {
     val lateness = delaySeconds?.let(::latenessText)
     val details = when {
-        possiblyPassed -> listOfNotNull(
-            "May already have passed",
+        possiblyPassed -> listOf(
+            "May have left",
             "was due ${minutesText(((nowEpochSeconds - expectedEpochSeconds) / 60).toInt().coerceAtLeast(1))} ago",
-            lateness,
         )
         !isRealtime -> listOf(if (dueMinutes <= 0) "Due now" else "Due in ${minutesText(dueMinutes)}", "scheduled")
         else -> listOfNotNull(lateness)
