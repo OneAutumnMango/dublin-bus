@@ -2,14 +2,19 @@ package dev.dublinbustracker.app.map
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import dev.dublinbustracker.core.LatLon
+import dev.dublinbustracker.core.MAX_TRACKED_ROUTES
 import dev.dublinbustracker.core.Stop
+import dev.dublinbustracker.core.nextColourIndex
 import dev.dublinbustracker.core.VehiclePosition
 import dev.dublinbustracker.data.TransitApiClient
+import dev.dublinbustracker.data.TransitApiException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 data class MapUiState(
@@ -29,6 +34,21 @@ data class Viewport(
     val maxLon: Double,
 )
 
+/** A route the user is following, with the colour slot its buses and path are drawn in. */
+data class TrackedRoute(val name: String, val colourIndex: Int)
+
+data class TrackingUiState(
+    val enabled: Boolean = false,
+    val routes: List<TrackedRoute> = emptyList(),
+    /** Live buses by route name. */
+    val vehicles: Map<String, List<VehiclePosition>> = emptyMap(),
+    /** Each route's path, by route name then direction id. */
+    val shapes: Map<String, Map<String, List<LatLon>>> = emptyMap(),
+    val message: String? = null,
+    val busy: Boolean = false,
+)
+
+private const val TRACK_REFRESH_MS = 30_000L
 private const val PAN_DEBOUNCE_MS = 400L
 private const val MAX_RADIUS_METERS = 5_000
 
@@ -41,6 +61,78 @@ class MapViewModel(private val apiClient: TransitApiClient) : ViewModel() {
 
     private var loadJob: Job? = null
     private var lastViewport: Viewport? = null
+
+    private val _tracking = MutableStateFlow(TrackingUiState())
+    val tracking: StateFlow<TrackingUiState> = _tracking.asStateFlow()
+    private var trackingJob: Job? = null
+
+    /** Turns route-following mode on or off. While on, the followed routes' buses refresh every 30s. */
+    fun setTracking(on: Boolean) {
+        _tracking.update { it.copy(enabled = on, message = null) }
+        trackingJob?.cancel()
+        if (on) {
+            trackingJob = viewModelScope.launch {
+                while (true) {
+                    if (_tracking.value.routes.isNotEmpty()) refreshTrackedBuses()
+                    delay(TRACK_REFRESH_MS)
+                }
+            }
+        }
+    }
+
+    fun addRoute(input: String) {
+        val name = input.trim().uppercase()
+        val current = _tracking.value
+        when {
+            name.isEmpty() -> return
+            current.routes.any { it.name == name } -> _tracking.update { it.copy(message = "$name is already shown") }
+            current.routes.size >= MAX_TRACKED_ROUTES -> _tracking.update { it.copy(message = "Up to $MAX_TRACKED_ROUTES routes at once") }
+            else -> viewModelScope.launch {
+                _tracking.update { it.copy(busy = true, message = null) }
+                runCatching { apiClient.vehiclesForRoute(name) }.fold(
+                    onSuccess = { vehicles ->
+                        // A route's path is a nicety: if it can't be fetched the buses still show.
+                        val shapes = listOf("0", "1").mapNotNull { direction ->
+                            runCatching { apiClient.routeShape(name, direction) }.getOrNull()?.let { direction to it }
+                        }.toMap()
+                        _tracking.update { state ->
+                            state.copy(
+                                routes = state.routes + TrackedRoute(name, nextColourIndex(state.routes.map { it.colourIndex })),
+                                vehicles = state.vehicles + (name to vehicles),
+                                shapes = state.shapes + (name to shapes),
+                                busy = false,
+                            )
+                        }
+                    },
+                    onFailure = { error ->
+                        val notFound = (error as? TransitApiException)?.statusCode == 404
+                        _tracking.update {
+                            it.copy(busy = false, message = if (notFound) "No route called $name" else error.message ?: "Couldn't add $name")
+                        }
+                    },
+                )
+            }
+        }
+    }
+
+    fun removeRoute(name: String) {
+        _tracking.update {
+            it.copy(
+                routes = it.routes.filterNot { route -> route.name == name },
+                vehicles = it.vehicles - name,
+                shapes = it.shapes - name,
+                message = null,
+            )
+        }
+    }
+
+    private suspend fun refreshTrackedBuses() {
+        val fresh = _tracking.value.routes.mapNotNull { route ->
+            runCatching { apiClient.vehiclesForRoute(route.name) }.getOrNull()?.let { route.name to it }
+        }.toMap()
+        // A route whose refresh failed keeps its last known buses.
+        _tracking.update { it.copy(vehicles = it.vehicles + fresh.filterKeys { name -> it.routes.any { route -> route.name == name } }) }
+    }
 
     fun onViewportChanged(viewport: Viewport) {
         lastViewport = viewport

@@ -11,6 +11,25 @@ import android.os.Looper
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.material.icons.filled.Route
+import androidx.compose.material3.FilledTonalIconToggleButton
+import dev.dublinbustracker.app.bus.BusInfoSheet
+import dev.dublinbustracker.core.toHexColour
+import dev.dublinbustracker.core.trackingColour
+import dev.dublinbustracker.core.trackingTextColour
+import org.maplibre.android.geometry.LatLngBounds
+import org.maplibre.android.style.layers.LineLayer
+import org.maplibre.android.style.layers.Property
+import org.maplibre.android.style.layers.PropertyFactory.lineCap
+import org.maplibre.android.style.layers.PropertyFactory.lineColor
+import org.maplibre.android.style.layers.PropertyFactory.lineJoin
+import org.maplibre.android.style.layers.PropertyFactory.lineOpacity
+import org.maplibre.android.style.layers.PropertyFactory.lineWidth
+import org.maplibre.android.style.layers.PropertyFactory.visibility
+import org.maplibre.geojson.Feature
+import org.maplibre.geojson.LineString
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -75,6 +94,13 @@ private const val CLUSTER_LAYER = "stop-clusters"
 private const val STOP_LAYER = "stop-points"
 private const val BUSES_SOURCE = "buses"
 private const val BUS_CIRCLE_LAYER = "bus-circles"
+private const val TRACK_LINES_SOURCE = "track-lines"
+private const val TRACK_BUSES_SOURCE = "track-buses"
+private const val TRACK_BUS_LAYER = "track-bus-circles"
+
+// Hidden while following routes, so only the followed buses and paths are on the map.
+private val BROWSE_LAYERS = listOf(CLUSTER_LAYER, "stop-cluster-count", STOP_LAYER, BUS_CIRCLE_LAYER, "bus-labels")
+private val TRACK_LAYERS = listOf("track-lines", TRACK_BUS_LAYER, "track-bus-labels")
 
 @Composable
 fun MapScreen(apiClient: TransitApiClient, onStopSelected: (Stop) -> Unit) {
@@ -83,10 +109,12 @@ fun MapScreen(apiClient: TransitApiClient, onStopSelected: (Stop) -> Unit) {
     )
     val state by viewModel.uiState.collectAsState()
     val showBuses by viewModel.showBuses.collectAsState()
+    val tracking by viewModel.tracking.collectAsState()
     val context = LocalContext.current
     val handle = rememberMapHandle()
     val latestStops by rememberUpdatedState(state.stops)
     val latestOnStopSelected by rememberUpdatedState(onStopSelected)
+    var infoTripId by remember { mutableStateOf<String?>(null) }
 
     var pendingLocationRequest by remember { mutableStateOf(false) }
     val locationPermissionLauncher = rememberLauncherForActivityResult(
@@ -159,6 +187,80 @@ fun MapScreen(apiClient: TransitApiClient, onStopSelected: (Stop) -> Unit) {
                 textAllowOverlap(true),
             ),
         )
+
+        // Followed routes: their paths and buses, coloured by route and direction from each feature's own properties.
+        style.addSource(GeoJsonSource(TRACK_LINES_SOURCE, collectionOf(emptyList())))
+        style.addLayer(
+            LineLayer("track-lines", TRACK_LINES_SOURCE).withProperties(
+                lineColor(Expression.toColor(Expression.get("color"))),
+                lineWidth(4f),
+                lineOpacity(0.8f),
+                lineCap(Property.LINE_CAP_ROUND),
+                lineJoin(Property.LINE_JOIN_ROUND),
+            ),
+        )
+        style.addSource(GeoJsonSource(TRACK_BUSES_SOURCE, collectionOf(emptyList())))
+        style.addLayer(
+            CircleLayer(TRACK_BUS_LAYER, TRACK_BUSES_SOURCE).withProperties(
+                circleColor(Expression.toColor(Expression.get("color"))),
+                circleStrokeColor(android.graphics.Color.WHITE),
+                circleStrokeWidth(2f),
+                circleRadius(15f),
+            ),
+        )
+        style.addLayer(
+            SymbolLayer("track-bus-labels", TRACK_BUSES_SOURCE).withProperties(
+                textField(Expression.get("label")),
+                textFont(MAP_BOLD_FONT),
+                textSize(11f),
+                textColor(Expression.toColor(Expression.get("textColor"))),
+                textAllowOverlap(true),
+            ),
+        )
+    }
+
+    // Following routes swaps the whole map over to just those routes' paths and buses.
+    LaunchedEffect(handle.style, tracking.enabled) {
+        val style = handle.style ?: return@LaunchedEffect
+        BROWSE_LAYERS.forEach { style.getLayer(it)?.setProperties(visibility(if (tracking.enabled) Property.NONE else Property.VISIBLE)) }
+        TRACK_LAYERS.forEach { style.getLayer(it)?.setProperties(visibility(if (tracking.enabled) Property.VISIBLE else Property.NONE)) }
+    }
+
+    LaunchedEffect(handle.style, tracking.routes, tracking.vehicles, tracking.shapes) {
+        val style = handle.style ?: return@LaunchedEffect
+        val lines = tracking.routes.flatMap { route ->
+            tracking.shapes[route.name].orEmpty().filterValues { it.size >= 2 }.map { (direction, path) ->
+                Feature.fromGeometry(LineString.fromLngLats(path.map { Point.fromLngLat(it.lon, it.lat) }))
+                    .also { it.addStringProperty("color", trackingColour(route.colourIndex, direction).toHexColour()) }
+            }
+        }
+        val buses = tracking.routes.flatMap { route ->
+            tracking.vehicles[route.name].orEmpty().map { bus ->
+                featureAt(
+                    bus.position.lat,
+                    bus.position.lon,
+                    "label" to bus.routeShortName,
+                    "color" to trackingColour(route.colourIndex, bus.directionId).toHexColour(),
+                    "textColor" to trackingTextColour(bus.directionId).toHexColour(),
+                    "tripId" to bus.tripId,
+                )
+            }
+        }
+        style.getSourceAs<GeoJsonSource>(TRACK_LINES_SOURCE)?.setGeoJson(collectionOf(lines))
+        style.getSourceAs<GeoJsonSource>(TRACK_BUSES_SOURCE)?.setGeoJson(collectionOf(buses))
+    }
+
+    // When a route is added, frame everything being followed so the new one is in view.
+    var followedCount by remember { mutableStateOf(0) }
+    LaunchedEffect(tracking.routes.size, tracking.shapes) {
+        if (tracking.routes.size > followedCount) {
+            val points = tracking.shapes.values.flatMap { it.values }.flatten().map { LatLng(it.lat, it.lon) }
+            val map = handle.map
+            if (map != null && points.size >= 2) {
+                map.easeCamera(CameraUpdateFactory.newLatLngBounds(LatLngBounds.Builder().includes(points).build(), 80), 600)
+            }
+        }
+        followedCount = tracking.routes.size
     }
 
     LaunchedEffect(handle.style, state.stops) {
@@ -181,6 +283,10 @@ fun MapScreen(apiClient: TransitApiClient, onStopSelected: (Stop) -> Unit) {
         val idleListener = MapLibreMap.OnCameraIdleListener { viewModel.onViewportChanged(map.currentViewport()) }
         val clickListener = MapLibreMap.OnMapClickListener { latLng ->
             val screenPoint = map.projection.toScreenLocation(latLng)
+            map.queryRenderedFeatures(screenPoint, TRACK_BUS_LAYER).firstOrNull()?.getStringProperty("tripId")?.let {
+                infoTripId = it
+                return@OnMapClickListener true
+            }
             val hit = map.queryRenderedFeatures(screenPoint, CLUSTER_LAYER, STOP_LAYER).firstOrNull()
                 ?: return@OnMapClickListener false
             val point = hit.geometry() as? Point ?: return@OnMapClickListener false
@@ -206,12 +312,27 @@ fun MapScreen(apiClient: TransitApiClient, onStopSelected: (Stop) -> Unit) {
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
-            FilterChip(
-                selected = showBuses,
-                onClick = viewModel::toggleBuses,
-                label = { Text(if (showBuses) "Buses shown" else "Show buses") },
-            )
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (!tracking.enabled) {
+                FilterChip(
+                    selected = showBuses,
+                    onClick = viewModel::toggleBuses,
+                    label = { Text(if (showBuses) "Buses shown" else "Show buses") },
+                )
+            } else {
+                Text("Following routes", style = MaterialTheme.typography.titleSmall)
+            }
+            Spacer(modifier = Modifier.weight(1f))
+            FilledTonalIconToggleButton(checked = tracking.enabled, onCheckedChange = viewModel::setTracking) {
+                Icon(Icons.Filled.Route, contentDescription = if (tracking.enabled) "Stop following routes" else "Follow routes")
+            }
+        }
+
+        if (tracking.enabled) {
+            TrackingPanel(state = tracking, onAdd = viewModel::addRoute, onRemove = viewModel::removeRoute)
         }
 
         state.message?.let {
@@ -226,9 +347,11 @@ fun MapScreen(apiClient: TransitApiClient, onStopSelected: (Stop) -> Unit) {
         Box(modifier = Modifier.fillMaxSize()) {
             AndroidView(modifier = Modifier.fillMaxSize(), factory = { handle.view })
 
-            if (state.loading) {
-                CircularProgressIndicator(modifier = Modifier.align(Alignment.TopEnd).padding(16.dp))
+            if (state.loading && !tracking.enabled) {
+                CircularProgressIndicator(modifier = Modifier.align(Alignment.TopStart).padding(16.dp))
             }
+
+            MapCompass(handle, modifier = Modifier.align(Alignment.TopEnd).padding(12.dp))
 
             FloatingActionButton(
                 onClick = {
@@ -248,6 +371,17 @@ fun MapScreen(apiClient: TransitApiClient, onStopSelected: (Stop) -> Unit) {
                 Icon(Icons.Filled.MyLocation, contentDescription = "Go to my location")
             }
         }
+    }
+
+    infoTripId?.let { tripId ->
+        BusInfoSheet(
+            tripId = tripId,
+            contextStop = null,
+            arrival = null,
+            apiClient = apiClient,
+            onViewOnMap = null,
+            onDismiss = { infoTripId = null },
+        )
     }
 }
 

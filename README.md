@@ -62,6 +62,12 @@ whatever area you're looking at (clustered when zoomed out), and "Show buses" ov
 vehicle positions for that viewport. Tapping an arrival on a stop's screen opens that trip's
 route: the path, every stop along it, the stop you're viewing highlighted, and the buses running it.
 
+The route icon at the top of the Map tab switches to following routes: type a route (S8, 4, 46A...)
+to add it, and every bus on it is shown, with its path, coloured by route - full colour for one
+direction and a lighter tint for the other, with a legend naming where each is heading. Tap a bus for
+its details. The compass in the corner shows how the map is turned: tap it to face north, double-tap
+to lock north (a padlock appears).
+
 Dublin is downloaded for offline use on first launch. Settings > Offline maps lists what's stored
 and lets you add more: pick Cork, Galway, Limerick or Waterford, or fit any area inside the frame
 on the map, and it shows the size before you download. Delete areas there too.
