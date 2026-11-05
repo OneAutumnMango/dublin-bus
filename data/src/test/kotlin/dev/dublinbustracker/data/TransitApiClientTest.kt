@@ -56,7 +56,8 @@ class TransitApiClientTest {
         server.enqueue(
             MockResponse().setBody(
                 """[{"routeShortName":"15","destination":"Clongriffin","dueMinutes":4,"isRealtime":true,
-                   "tripId":"t1","routeId":"r1","expectedEpochSeconds":1700,"delaySeconds":120,"vehicleId":"bus-1"}]""",
+                   "tripId":"t1","routeId":"r1","expectedEpochSeconds":1700,"delaySeconds":120,"vehicleId":"bus-1",
+                   "possiblyPassed":true}]""",
             ),
         )
 
@@ -67,6 +68,7 @@ class TransitApiClientTest {
         assertEquals("bus-1", arrival.vehicleId)
         assertEquals(120, arrival.delaySeconds)
         assertTrue(arrival.isRealtime)
+        assertTrue(arrival.possiblyPassed)
     }
 
     @Test

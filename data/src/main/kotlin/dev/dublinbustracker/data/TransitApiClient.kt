@@ -44,6 +44,7 @@ private data class ArrivalDto(
     val expectedEpochSeconds: Long = 0,
     val delaySeconds: Int? = null,
     val vehicleId: String? = null,
+    val possiblyPassed: Boolean = false,
 )
 
 @Serializable
@@ -241,6 +242,7 @@ class TransitApiClient(
         expectedEpochSeconds = expectedEpochSeconds,
         delaySeconds = delaySeconds,
         vehicleId = vehicleId,
+        possiblyPassed = possiblyPassed,
     )
 
     private fun VehicleDto.toVehicle() =

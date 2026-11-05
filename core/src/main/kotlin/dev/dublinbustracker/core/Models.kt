@@ -22,6 +22,8 @@ data class Arrival(
     val expectedEpochSeconds: Long = 0,
     val delaySeconds: Int? = null,
     val vehicleId: String? = null,
+    /** Its predicted time has gone by without the feed moving on, so it may already have left. */
+    val possiblyPassed: Boolean = false,
 )
 
 data class Route(
