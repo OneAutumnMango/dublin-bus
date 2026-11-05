@@ -127,4 +127,18 @@ class RouteTrackingTest {
 
         assertEquals(listOf("14", "S8"), rankRouteSuggestions("4", routes).map { it.shortName })
     }
+
+    @Test
+    fun `a direction is named by its last stop`() {
+        fun stop(name: String) = Stop("id-$name", "1", name, 0.0, 0.0)
+        val stops = mapOf(
+            "S8" to mapOf("0" to listOf(stop("Kingswood"), stop("Dun Laoghaire Stn")), "1" to listOf(stop("Dun Laoghaire Stn"), stop("Kingswood Avenue"))),
+            "4" to mapOf("0" to emptyList()),
+        )
+
+        val destinations = destinationsOf(stops)
+
+        assertEquals(mapOf("0" to "Dun Laoghaire Stn", "1" to "Kingswood Avenue"), destinations["S8"])
+        assertEquals(emptyMap(), destinations["4"])
+    }
 }

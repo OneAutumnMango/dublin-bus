@@ -76,3 +76,9 @@ fun rankRouteSuggestions(query: String, routes: List<Route>, limit: Int = 8): Li
         .sortedWith(compareBy({ rank(it) }, { it.shortName.length }, { it.shortName }))
         .take(limit)
 }
+
+/** Where each direction of each route ends up (its last stop), by route then direction id - for labelling a direction with no bus. */
+fun destinationsOf(stops: Map<String, Map<String, List<Stop>>>): Map<String, Map<String, String>> =
+    stops.mapValues { (_, byDirection) ->
+        byDirection.mapNotNull { (direction, list) -> list.lastOrNull()?.name?.let { direction to it } }.toMap()
+    }
