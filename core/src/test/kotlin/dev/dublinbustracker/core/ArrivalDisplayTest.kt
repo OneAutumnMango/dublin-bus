@@ -42,8 +42,13 @@ class ArrivalDisplayTest {
 
     @Test
     fun `long waits read in hours`() {
-        assertEquals("1 h 5 min", arrival(dueMinutes = 65).display(now, zone).headline)
-        assertEquals("2 h", arrival(dueMinutes = 120).display(now, zone).headline)
+        assertEquals("1h 5m", arrival(dueMinutes = 65).display(now, zone).headline)
+        assertEquals("2h", arrival(dueMinutes = 120).display(now, zone).headline)
+    }
+
+    @Test
+    fun `a long wait in the small print is just as short`() {
+        assertEquals("Due in 1h 8m · scheduled", arrival(dueMinutes = 68, isRealtime = false).display(now, zone).detailLine)
     }
 
     @Test
