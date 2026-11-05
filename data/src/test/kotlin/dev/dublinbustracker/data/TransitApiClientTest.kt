@@ -1,5 +1,6 @@
 package dev.dublinbustracker.data
 
+import dev.dublinbustracker.core.TripInfo
 import kotlinx.coroutines.test.runTest
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
@@ -169,5 +170,72 @@ class TransitApiClientTest {
         server.enqueue(MockResponse().setBody("[]"))
         client.searchStops("b")
         assertEquals("second", server.takeRequest().getHeader("X-Api-Key"))
+    }
+
+    @Test
+    fun `trip info maps route, direction and headsign`() = runTest {
+        server.enqueue(
+            MockResponse().setBody(
+                """{"tripId":"t1","routeId":"3 S8 a","routeShortName":"S8","headsign":"Citywest",
+                   "directionId":"1","shapeId":"6004_190","stopCalls":[]}""",
+            ),
+        )
+
+        val trip = client().trip("t1")
+
+        assertEquals("/v1/trips/t1", server.takeRequest().path)
+        assertEquals(TripInfo("t1", "3 S8 a", "S8", "Citywest", "1"), trip)
+    }
+
+    @Test
+    fun `trip shape is decoded from the encoded polyline`() = runTest {
+        server.enqueue(
+            MockResponse().setBody("""{"shapeId":"s","pointCount":3,"encodedPolyline":"_p~iF~ps|U_ulLnnqC_mqNvxq`@"}"""),
+        )
+
+        val shape = client().tripShape("t1")
+
+        assertEquals("/v1/trips/t1/shape", server.takeRequest().path)
+        assertEquals(3, shape.size)
+        assertEquals(38.5, shape[0].lat, 1e-9)
+        assertEquals(-120.2, shape[0].lon, 1e-9)
+        assertEquals(43.252, shape[2].lat, 1e-9)
+        assertEquals(-126.453, shape[2].lon, 1e-9)
+    }
+
+    @Test
+    fun `route stops returns the requested direction in order`() = runTest {
+        server.enqueue(
+            MockResponse().setBody(
+                """{"routeId":"3 S8 a","shortName":"S8","directions":{
+                   "1":[{"id":"a","code":"1","name":"First","lat":1.0,"lon":2.0},{"id":"b","code":"2","name":"Second","lat":1.1,"lon":2.1}]}}""",
+            ),
+        )
+
+        val stops = client().routeStops("3 S8 a", "1")
+
+        assertEquals("/v1/routes/3%20S8%20a/stops?direction=1", server.takeRequest().path)
+        assertEquals(listOf("First", "Second"), stops.map { it.name })
+    }
+
+    @Test
+    fun `route stops for a direction the route lacks is empty`() = runTest {
+        server.enqueue(MockResponse().setBody("""{"routeId":"r","shortName":"1","directions":{"0":[]}}"""))
+
+        assertEquals(emptyList(), client().routeStops("r", "1"))
+    }
+
+    @Test
+    fun `route vehicles can be limited to one direction`() = runTest {
+        server.enqueue(
+            MockResponse().setBody(
+                """[{"vehicleId":"v1","routeShortName":"S8","headsign":"Citywest","lat":1.0,"lon":2.0,"tripId":"t1","directionId":"1"},
+                   {"vehicleId":"v2","routeShortName":"S8","headsign":"Dun Laoghaire","lat":1.0,"lon":2.0,"tripId":"t2","directionId":"0"}]""",
+            ),
+        )
+        server.enqueue(MockResponse().setBody("""[{"vehicleId":"v2","directionId":"0"}]"""))
+
+        assertEquals(listOf("v1"), client().vehiclesForRoute("3 S8 a", directionId = "1").map { it.vehicleId })
+        assertEquals(listOf("v2"), client().vehiclesForRoute("3 S8 a").map { it.vehicleId })
     }
 }

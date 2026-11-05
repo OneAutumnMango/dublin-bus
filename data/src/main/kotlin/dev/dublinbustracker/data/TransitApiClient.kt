@@ -5,6 +5,7 @@ import dev.dublinbustracker.core.LatLon
 import dev.dublinbustracker.core.Route
 import dev.dublinbustracker.core.ServerStatus
 import dev.dublinbustracker.core.Stop
+import dev.dublinbustracker.core.TripInfo
 import dev.dublinbustracker.core.VehiclePosition
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -62,7 +63,23 @@ private data class VehicleDto(
     val lon: Double = 0.0,
     val bearing: Float? = null,
     val tripId: String = "",
+    val directionId: String = "",
 )
+
+@Serializable
+private data class TripDto(
+    val tripId: String,
+    val routeId: String = "",
+    val routeShortName: String = "",
+    val headsign: String = "",
+    val directionId: String = "",
+)
+
+@Serializable
+private data class ShapeDto(val encodedPolyline: String = "")
+
+@Serializable
+private data class RouteStopsDto(val directions: Map<String, List<StopDto>> = emptyMap())
 
 @Serializable
 private data class StatusDto(
@@ -142,9 +159,28 @@ class TransitApiClient(
             "limit" to limit.toString(),
         ) { body -> json.decodeFromString<List<VehicleDto>>(body).map { it.toVehicle() } }
 
-    suspend fun vehiclesForRoute(route: String): List<VehiclePosition> =
+    /** Live buses on a route, optionally only those running in one [directionId]. */
+    suspend fun vehiclesForRoute(route: String, directionId: String? = null): List<VehiclePosition> =
         get("v1/routes/$route/vehicles") { body ->
             json.decodeFromString<List<VehicleDto>>(body).map { it.toVehicle() }
+                .filter { directionId == null || it.directionId == directionId }
+        }
+
+    suspend fun trip(tripId: String): TripInfo =
+        get("v1/trips/$tripId") { body ->
+            json.decodeFromString<TripDto>(body).let {
+                TripInfo(it.tripId, it.routeId, it.routeShortName, it.headsign, it.directionId)
+            }
+        }
+
+    /** The path a trip drives, as map points. */
+    suspend fun tripShape(tripId: String): List<LatLon> =
+        get("v1/trips/$tripId/shape") { body -> decodePolyline(json.decodeFromString<ShapeDto>(body).encodedPolyline) }
+
+    /** A route's stops in running order for one direction. */
+    suspend fun routeStops(route: String, directionId: String): List<Stop> =
+        get("v1/routes/$route/stops", "direction" to directionId) { body ->
+            json.decodeFromString<RouteStopsDto>(body).directions[directionId].orEmpty().map { it.toStop() }
         }
 
     private suspend fun <T> get(
@@ -208,5 +244,5 @@ class TransitApiClient(
     )
 
     private fun VehicleDto.toVehicle() =
-        VehiclePosition(vehicleId, routeShortName, headsign, LatLon(lat, lon), bearing, tripId)
+        VehiclePosition(vehicleId, routeShortName, headsign, LatLon(lat, lon), bearing, tripId, directionId)
 }

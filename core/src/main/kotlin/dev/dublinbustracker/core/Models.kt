@@ -38,6 +38,16 @@ data class VehiclePosition(
     val position: LatLon,
     val bearing: Float? = null,
     val tripId: String = "",
+    val directionId: String = "",
+)
+
+/** Just enough of a trip to draw it: which route and direction, and where it's heading. */
+data class TripInfo(
+    val tripId: String,
+    val routeId: String,
+    val routeShortName: String,
+    val headsign: String,
+    val directionId: String,
 )
 
 /** The server's own health, shown when testing a connection from Settings. */
