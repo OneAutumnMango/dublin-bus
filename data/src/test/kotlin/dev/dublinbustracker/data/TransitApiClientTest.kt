@@ -272,4 +272,14 @@ class TransitApiClientTest {
         assertEquals(null, details.vehicle)
         assertEquals(emptyList(), details.stopCalls)
     }
+
+    @Test
+    fun `a route's shape for a direction is decoded from its polyline`() = runTest {
+        server.enqueue(MockResponse().setBody("""{"shapeId":"s","pointCount":3,"encodedPolyline":"_p~iF~ps|U_ulLnnqC_mqNvxq`@"}"""))
+
+        val shape = client().routeShape("3 S8 a", "1")
+
+        assertEquals("/v1/routes/3%20S8%20a/shape?direction=1", server.takeRequest().path)
+        assertEquals(3, shape.size)
+    }
 }

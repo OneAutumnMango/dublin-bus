@@ -220,6 +220,12 @@ class TransitApiClient(
     suspend fun tripShape(tripId: String): List<LatLon> =
         get("v1/trips/$tripId/shape") { body -> decodePolyline(json.decodeFromString<ShapeDto>(body).encodedPolyline) }
 
+    /** The path a route drives in one direction. */
+    suspend fun routeShape(route: String, directionId: String): List<LatLon> =
+        get("v1/routes/$route/shape", "direction" to directionId) { body ->
+            decodePolyline(json.decodeFromString<ShapeDto>(body).encodedPolyline)
+        }
+
     /** A route's stops in running order for one direction. */
     suspend fun routeStops(route: String, directionId: String): List<Stop> =
         get("v1/routes/$route/stops", "direction" to directionId) { body ->
