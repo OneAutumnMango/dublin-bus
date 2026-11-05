@@ -70,7 +70,7 @@ private fun AppRoot(container: AppContainer) {
             onBack = { routeMapArrival = null },
         )
         stop != null -> StopDetailScreen(
-            stop = stop,
+            initialStop = stop,
             apiClient = container.apiClient,
             favouritesRepository = container.favouritesRepository,
             onBack = { selectedStop = null },

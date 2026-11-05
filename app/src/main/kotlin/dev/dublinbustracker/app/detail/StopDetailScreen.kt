@@ -10,19 +10,22 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -36,6 +39,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -53,22 +58,24 @@ import java.time.ZoneId
 
 @Composable
 fun StopDetailScreen(
-    stop: Stop,
+    initialStop: Stop,
     apiClient: TransitApiClient,
     favouritesRepository: FavouritesRepository,
     onBack: () -> Unit,
     onViewRoute: (Arrival) -> Unit,
 ) {
     val viewModel = viewModel<StopDetailViewModel>(
-        key = stop.id,
-        factory = viewModelFactory { initializer { StopDetailViewModel(stop.id, apiClient) } },
+        key = initialStop.id,
+        factory = viewModelFactory { initializer { StopDetailViewModel(initialStop, apiClient) } },
     )
+    val stop by viewModel.stop.collectAsState()
+    val pulling by viewModel.pulling.collectAsState()
     val uiState by viewModel.uiState.collectAsState()
     val routeFilter by viewModel.routeFilter.collectAsState()
     val favouriteIds by favouritesRepository.favouriteIds.collectAsState()
 
     var autoRefresh by remember { mutableStateOf(true) }
-    LaunchedEffect(stop.id, autoRefresh) {
+    LaunchedEffect(initialStop.id, autoRefresh) {
         while (autoRefresh) {
             delay(ARRIVALS_REFRESH_INTERVAL_MS)
             viewModel.refresh()
@@ -90,7 +97,6 @@ fun StopDetailScreen(
                 if (autoRefresh) "Stop ${stop.code}" else "Stop ${stop.code} · auto-refresh paused",
                 modifier = Modifier.weight(1f),
             )
-            IconButton(onClick = viewModel::refresh) { Icon(Icons.Filled.Refresh, contentDescription = "Refresh") }
             IconButton(onClick = { autoRefresh = !autoRefresh }) {
                 Icon(
                     if (autoRefresh) Icons.Filled.Pause else Icons.Filled.PlayArrow,
@@ -121,16 +127,34 @@ fun StopDetailScreen(
             }
         }
 
-        when (val state = uiState) {
-            is ArrivalsUiState.Loading -> CircularProgressIndicator(modifier = Modifier.padding(top = 16.dp))
-            is ArrivalsUiState.Error -> Text(state.message, color = MaterialTheme.colorScheme.error)
-            is ArrivalsUiState.Loaded -> if (state.arrivals.isEmpty()) {
-                Text("No upcoming arrivals", modifier = Modifier.padding(top = 16.dp))
-            } else {
-                LazyColumn(modifier = Modifier.padding(top = 8.dp)) {
-                    items(state.arrivals) { arrival ->
-                        ArrivalRow(arrival, onClick = { onViewRoute(arrival) })
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        // Everything sits in one scrollable list so pulling down works for the empty and error
+        // states too. It only triggers from the very top: scrolling back up never starts one.
+        // A drag that *starts* further down and carries on past the top must not count as a
+        // pull, or scrolling back up to the top would refresh on the way. So a pull only counts
+        // if the list was already at the top when the finger went down.
+        val listState = rememberLazyListState()
+        var gestureStartedAtTop by remember { mutableStateOf(true) }
+        PullToRefreshBox(
+            isRefreshing = pulling,
+            onRefresh = { if (gestureStartedAtTop) viewModel.pullToRefresh() },
+            modifier = Modifier.fillMaxSize().pointerInput(Unit) {
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                    gestureStartedAtTop = !listState.canScrollBackward
+                }
+            },
+        ) {
+            LazyColumn(state = listState, modifier = Modifier.fillMaxSize().padding(top = 8.dp)) {
+                when (val state = uiState) {
+                    is ArrivalsUiState.Loading -> item { CircularProgressIndicator(modifier = Modifier.padding(top = 8.dp)) }
+                    is ArrivalsUiState.Error -> item { Text(state.message, color = MaterialTheme.colorScheme.error) }
+                    is ArrivalsUiState.Loaded -> if (state.arrivals.isEmpty()) {
+                        item { Text("No upcoming arrivals", modifier = Modifier.padding(top = 8.dp)) }
+                    } else {
+                        items(state.arrivals) { arrival ->
+                            ArrivalRow(arrival, onClick = { onViewRoute(arrival) })
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                        }
                     }
                 }
             }
