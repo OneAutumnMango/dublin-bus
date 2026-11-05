@@ -1,13 +1,8 @@
 package dev.dublinbustracker.app.map
 
 import android.Manifest
-import android.annotation.SuppressLint
 import android.content.Context
 import android.content.pm.PackageManager
-import android.location.Location
-import android.location.LocationListener
-import android.location.LocationManager
-import android.os.Looper
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
@@ -16,6 +11,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.material.icons.filled.Route
 import androidx.compose.material3.FilledTonalIconToggleButton
 import dev.dublinbustracker.app.bus.BusInfoSheet
+import dev.dublinbustracker.app.location.requestCurrentLocation
 import dev.dublinbustracker.core.toHexColour
 import dev.dublinbustracker.core.trackingColour
 import dev.dublinbustracker.core.trackingTextColour
@@ -417,41 +413,14 @@ fun MapScreen(apiClient: TransitApiClient, onStopSelected: (Stop) -> Unit) {
     }
 }
 
-/** Centres the map on the device's current location, requesting one fresh fix if there's no
- * recent one cached. Caller must already hold ACCESS_FINE_LOCATION or ACCESS_COARSE_LOCATION. */
-@SuppressLint("MissingPermission")
+/** Centres the map on the device's current location. Caller must already hold the location permission. */
 private fun seekToCurrentLocation(context: Context, map: MapLibreMap) {
-    val locationManager = context.getSystemService(LocationManager::class.java) ?: return
-    val onFix: (Location) -> Unit = { location ->
+    requestCurrentLocation(context) { location ->
         map.animateCamera(
             CameraUpdateFactory.newLatLngZoom(LatLng(location.latitude, location.longitude), MY_LOCATION_ZOOM),
             500,
         )
     }
-
-    val providers = listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)
-        .filter { runCatching { locationManager.isProviderEnabled(it) }.getOrDefault(false) }
-    val lastKnown = providers
-        .mapNotNull { runCatching { locationManager.getLastKnownLocation(it) }.getOrNull() }
-        .maxByOrNull { it.time }
-    if (lastKnown != null) {
-        onFix(lastKnown)
-        return
-    }
-
-    val provider = providers.firstOrNull() ?: return
-    locationManager.requestLocationUpdates(
-        provider,
-        0L,
-        0f,
-        object : LocationListener {
-            override fun onLocationChanged(location: Location) {
-                onFix(location)
-                locationManager.removeUpdates(this)
-            }
-        },
-        Looper.getMainLooper(),
-    )
 }
 
 private fun MapLibreMap.currentViewport(): Viewport {

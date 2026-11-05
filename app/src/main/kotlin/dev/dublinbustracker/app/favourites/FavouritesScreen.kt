@@ -1,10 +1,20 @@
 package dev.dublinbustracker.app.favourites
 
+import android.Manifest
+import android.content.Context
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.MyLocation
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -12,11 +22,24 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
+import androidx.core.content.edit
+import dev.dublinbustracker.app.location.requestCurrentLocation
+import dev.dublinbustracker.core.LatLon
 import dev.dublinbustracker.core.Stop
+import dev.dublinbustracker.core.distanceText
+import dev.dublinbustracker.core.sortedByDistance
 import dev.dublinbustracker.data.FavouritesRepository
 import dev.dublinbustracker.data.TransitApiClient
+
+private const val PREFS = "favourites_ui"
+private const val NEAREST_FIRST = "nearest_first"
 
 @Composable
 fun FavouritesScreen(
@@ -24,7 +47,49 @@ fun FavouritesScreen(
     favouritesRepository: FavouritesRepository,
     onStopSelected: (Stop) -> Unit,
 ) {
+    val context = LocalContext.current
+    val prefs = remember { context.getSharedPreferences(PREFS, Context.MODE_PRIVATE) }
     val favourites by favouritesRepository.favourites.collectAsState()
+
+    var nearestFirst by remember { mutableStateOf(prefs.getBoolean(NEAREST_FIRST, false)) }
+    var here by remember { mutableStateOf<LatLon?>(null) }
+    var status by remember { mutableStateOf<String?>(null) }
+
+    fun setNearestFirst(on: Boolean) {
+        nearestFirst = on
+        prefs.edit { putBoolean(NEAREST_FIRST, on) }
+    }
+
+    fun locate() {
+        status = "Finding your location..."
+        requestCurrentLocation(
+            context,
+            onUnavailable = { status = "Couldn't get your location - is location switched on?" },
+        ) { fix ->
+            here = LatLon(fix.latitude, fix.longitude)
+            status = null
+        }
+    }
+
+    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) {
+            locate()
+        } else {
+            setNearestFirst(false)
+            status = "Location permission is needed to sort by distance"
+        }
+    }
+
+    // Looked up afresh each time the sort is switched on or the tab is opened, so it follows you around.
+    LaunchedEffect(nearestFirst) {
+        if (!nearestFirst) {
+            status = null
+            return@LaunchedEffect
+        }
+        val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) ==
+            PackageManager.PERMISSION_GRANTED
+        if (granted) locate() else permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+    }
 
     // Entries migrated from the old id-only format have no name until the server fills them in.
     LaunchedEffect(favourites) {
@@ -43,16 +108,39 @@ fun FavouritesScreen(
         return
     }
 
-    LazyColumn(modifier = Modifier.fillMaxSize()) {
-        items(favourites, key = { it.id }) { favourite ->
-            ListItem(
-                headlineContent = { Text(favourite.name.ifBlank { favourite.id }) },
-                supportingContent = { Text("Stop ${favourite.code.ifBlank { "-" }}") },
-                trailingContent = {
-                    FavouriteStarButton(isFavourite = true, onToggle = { favouritesRepository.remove(favourite.id) })
-                },
-                modifier = Modifier.clickable { onStopSelected(favourite.toStop()) },
-            )
+    val origin = here
+    val rows = if (nearestFirst && origin != null) {
+        // A favourite whose position isn't known yet can't be placed, so it goes last.
+        sortedByDistance(favourites, origin) { if (it.needsDetails || (it.lat == 0.0 && it.lon == 0.0)) null else LatLon(it.lat, it.lon) }
+    } else {
+        favourites.map { it to null }
+    }
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        FilterChip(
+            selected = nearestFirst,
+            onClick = { setNearestFirst(!nearestFirst) },
+            label = { Text("Nearest first") },
+            leadingIcon = { Icon(Icons.Filled.MyLocation, contentDescription = null) },
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+        )
+        status?.let {
+            Text(it, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
+        }
+
+        LazyColumn(modifier = Modifier.fillMaxSize()) {
+            items(rows, key = { it.first.id }) { (favourite, meters) ->
+                ListItem(
+                    headlineContent = { Text(favourite.name.ifBlank { favourite.id }) },
+                    supportingContent = {
+                        Text(listOfNotNull("Stop ${favourite.code.ifBlank { "-" }}", meters?.let(::distanceText)).joinToString(" · "))
+                    },
+                    trailingContent = {
+                        FavouriteStarButton(isFavourite = true, onToggle = { favouritesRepository.remove(favourite.id) })
+                    },
+                    modifier = Modifier.clickable { onStopSelected(favourite.toStop()) },
+                )
+            }
         }
     }
 }

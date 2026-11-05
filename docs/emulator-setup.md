@@ -100,6 +100,22 @@ that was already open keeps its old group list. `sg kvm -c '<command>'` runs one
 `kvm` added to its group list without needing a fresh login. A brand new shell started after the
 `usermod` doesn't need this.
 
+## Faking the GPS (so "nearest first" and "my location" make sense)
+
+The emulator thinks it is at Google's HQ in California, about 8,200 km from every stop. Point it at
+Dublin city centre (note the order: **longitude, then latitude**):
+
+```bash
+adb emu geo fix -6.2603 53.3498
+```
+
+It prints `OK`, but a new fix only reaches an app **while that app is actively asking for
+location** - sent beforehand it is dropped, and the emulator keeps serving its old California
+fix. So send it repeatedly while the screen is opening, e.g.
+`for i in $(seq 12); do adb emu geo fix -6.2603 53.3498; sleep 1; done &` and then open the tab.
+The app ignores a remembered fix older than two minutes (and asks for a fresh one), which is
+what makes this work; if no fresh fix arrives within ten seconds it falls back to the old one.
+
 ## Known-good state as of this setup
 
 Verified working end to end: booted the emulator, built and installed the app, started
