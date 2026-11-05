@@ -31,6 +31,7 @@ import org.maplibre.android.maps.MapLibreMap
 
 private val NORTH_RED = Color(0xFFD32F2F)
 private val SOUTH_GREY = Color(0xFF9E9E9E)
+private val LOCK_GREY = Color(0xFFBDBDBD)
 
 /**
  * A compass showing how the map is turned. Tap to swing it back to north; double-tap to lock it
@@ -98,9 +99,8 @@ fun MapCompass(handle: MapHandle, modifier: Modifier = Modifier) {
                 Icon(
                     Icons.Filled.Lock,
                     contentDescription = "North is locked",
-                    // Centred over the needle and see-through, so the needle still reads beneath it.
-                    tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.55f),
-                    modifier = Modifier.size(30.dp),
+                    tint = LOCK_GREY,
+                    modifier = Modifier.size(24.dp),
                 )
             }
         }
