@@ -10,12 +10,14 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -66,6 +68,7 @@ import org.maplibre.android.style.layers.PropertyFactory.iconImage
 import org.maplibre.android.style.layers.PropertyFactory.lineWidth
 import org.maplibre.android.style.layers.PropertyFactory.symbolPlacement
 import org.maplibre.android.style.layers.PropertyFactory.symbolSpacing
+import org.maplibre.android.style.layers.PropertyFactory.visibility
 import org.maplibre.android.style.layers.PropertyFactory.textAllowOverlap
 import org.maplibre.android.style.layers.PropertyFactory.textColor
 import org.maplibre.android.style.layers.PropertyFactory.textField
@@ -83,7 +86,6 @@ private const val YOUR_BUS_COLOR = 0xFF2E7D32.toInt()
 private const val OTHER_BUS_COLOR = 0xFFEF6C00.toInt()
 private const val FIT_PADDING_PX = 80
 private const val ARROW_COLOR = 0xFF0D47A1.toInt()
-private const val STOPS_MIN_ZOOM = 11f
 
 private const val ARROW_IMAGE = "route-arrow"
 private const val LINE_SOURCE = "route-line"
@@ -118,6 +120,8 @@ fun RouteMapScreen(stop: Stop, arrival: Arrival, apiClient: TransitApiClient, on
     var tappedLabel by remember { mutableStateOf<String?>(null) }
     var infoTripId by remember { mutableStateOf<String?>(null) }
 
+    var showStops by remember { mutableStateOf(true) }
+
     BackHandler(onBack = onBack)
 
     // Layers go in bottom-to-top once per loaded style: path, stops, buses, then the viewed
@@ -148,10 +152,9 @@ fun RouteMapScreen(stop: Stop, arrival: Arrival, apiClient: TransitApiClient, on
                 iconIgnorePlacement(true),
             ),
         )
-        // On a long route the stops overlap into a solid smear that hides the path itself, so they only appear once zoomed in.
         style.addLayer(
-            CircleLayer(STOPS_LAYER, STOPS_SOURCE).apply { minZoom = STOPS_MIN_ZOOM }.withProperties(
-                circleColor(android.graphics.Color.WHITE), circleStrokeColor(MAP_BLUE), circleStrokeWidth(zoomScaled(1f, 2.5f)), circleRadius(zoomScaled(2.5f, 5.5f)),
+            CircleLayer(STOPS_LAYER, STOPS_SOURCE).withProperties(
+                circleColor(android.graphics.Color.WHITE), circleStrokeColor(MAP_BLUE), circleStrokeWidth(zoomScaled(0.8f, 2.5f)), circleRadius(zoomScaled(2f, 5.5f)),
             ),
         )
         style.addLayer(
@@ -203,6 +206,10 @@ fun RouteMapScreen(stop: Stop, arrival: Arrival, apiClient: TransitApiClient, on
         }
     }
 
+    LaunchedEffect(handle.style, showStops) {
+        handle.style?.getLayer(STOPS_LAYER)?.setProperties(visibility(if (showStops) Property.VISIBLE else Property.NONE))
+    }
+
     LaunchedEffect(handle.style, state.vehicles) {
         handle.style?.getSourceAs<GeoJsonSource>(BUSES_SOURCE)?.setGeoJson(
             collectionOf(
@@ -252,7 +259,7 @@ fun RouteMapScreen(stop: Stop, arrival: Arrival, apiClient: TransitApiClient, on
             }
             TextButton(onClick = onBack) { Text("Back") }
         }
-        Legend(busCount = state.vehicles.size)
+        Legend(busCount = state.vehicles.size, showStops = showStops, onShowStops = { showStops = it })
 
         state.error?.let {
             Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(16.dp))
@@ -289,7 +296,7 @@ fun RouteMapScreen(stop: Stop, arrival: Arrival, apiClient: TransitApiClient, on
 }
 
 @Composable
-private fun Legend(busCount: Int) {
+private fun Legend(busCount: Int, showStops: Boolean, onShowStops: (Boolean) -> Unit) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -298,6 +305,8 @@ private fun Legend(busCount: Int) {
         LegendItem(Color(THIS_STOP_COLOR), "This stop")
         LegendItem(Color(YOUR_BUS_COLOR), "Your bus")
         LegendItem(Color(OTHER_BUS_COLOR), if (busCount == 1) "1 bus" else "$busCount buses")
+        Spacer(modifier = Modifier.weight(1f))
+        FilterChip(selected = showStops, onClick = { onShowStops(!showStops) }, label = { Text("Stops") })
     }
 }
 

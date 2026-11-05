@@ -96,11 +96,13 @@ private const val BUSES_SOURCE = "buses"
 private const val BUS_CIRCLE_LAYER = "bus-circles"
 private const val TRACK_LINES_SOURCE = "track-lines"
 private const val TRACK_BUSES_SOURCE = "track-buses"
+private const val TRACK_STOPS_SOURCE = "track-stops"
+private const val TRACK_STOP_LAYER = "track-stop-points"
 private const val TRACK_BUS_LAYER = "track-bus-circles"
 
 // Hidden while following routes, so only the followed buses and paths are on the map.
 private val BROWSE_LAYERS = listOf(CLUSTER_LAYER, "stop-cluster-count", STOP_LAYER, BUS_CIRCLE_LAYER, "bus-labels")
-private val TRACK_LAYERS = listOf("track-lines", TRACK_BUS_LAYER, "track-bus-labels")
+private val TRACK_LAYERS = listOf("track-lines", TRACK_STOP_LAYER, TRACK_BUS_LAYER, "track-bus-labels")
 
 @Composable
 fun MapScreen(apiClient: TransitApiClient, onStopSelected: (Stop) -> Unit) {
@@ -115,6 +117,7 @@ fun MapScreen(apiClient: TransitApiClient, onStopSelected: (Stop) -> Unit) {
     val handle = rememberMapHandle()
     val latestStops by rememberUpdatedState(state.stops)
     val latestOnStopSelected by rememberUpdatedState(onStopSelected)
+    val latestTracking by rememberUpdatedState(tracking)
     var infoTripId by remember { mutableStateOf<String?>(null) }
 
     var pendingLocationRequest by remember { mutableStateOf(false) }
@@ -200,6 +203,15 @@ fun MapScreen(apiClient: TransitApiClient, onStopSelected: (Stop) -> Unit) {
                 lineJoin(Property.LINE_JOIN_ROUND),
             ),
         )
+        style.addSource(GeoJsonSource(TRACK_STOPS_SOURCE, collectionOf(emptyList())))
+        style.addLayer(
+            CircleLayer(TRACK_STOP_LAYER, TRACK_STOPS_SOURCE).withProperties(
+                circleColor(android.graphics.Color.WHITE),
+                circleStrokeColor(Expression.toColor(Expression.get("color"))),
+                circleStrokeWidth(Expression.interpolate(Expression.linear(), Expression.zoom(), Expression.stop(9, 1f), Expression.stop(15, 2.5f))),
+                circleRadius(Expression.interpolate(Expression.linear(), Expression.zoom(), Expression.stop(9, 2f), Expression.stop(15, 5.5f))),
+            ),
+        )
         style.addSource(GeoJsonSource(TRACK_BUSES_SOURCE, collectionOf(emptyList())))
         style.addLayer(
             CircleLayer(TRACK_BUS_LAYER, TRACK_BUSES_SOURCE).withProperties(
@@ -221,13 +233,13 @@ fun MapScreen(apiClient: TransitApiClient, onStopSelected: (Stop) -> Unit) {
     }
 
     // Following routes swaps the whole map over to just those routes' paths and buses.
-    LaunchedEffect(handle.style, tracking.enabled) {
+    LaunchedEffect(handle.style, tracking.enabled, tracking.showStops) {
         val style = handle.style ?: return@LaunchedEffect
         BROWSE_LAYERS.forEach { style.getLayer(it)?.setProperties(visibility(if (tracking.enabled) Property.NONE else Property.VISIBLE)) }
         TRACK_LAYERS.forEach { style.getLayer(it)?.setProperties(visibility(if (tracking.enabled) Property.VISIBLE else Property.NONE)) }
+        style.getLayer(TRACK_STOP_LAYER)?.setProperties(visibility(if (tracking.enabled && tracking.showStops) Property.VISIBLE else Property.NONE))
     }
-
-    LaunchedEffect(handle.style, tracking.routes, tracking.vehicles, tracking.shapes, tracking.hidden) {
+    LaunchedEffect(handle.style, tracking.routes, tracking.vehicles, tracking.shapes, tracking.stops, tracking.hidden) {
         val style = handle.style ?: return@LaunchedEffect
         val lines = tracking.routes.flatMap { route ->
             tracking.shapes[route.name].orEmpty().filter { (direction, path) -> path.size >= 2 && (route.name to direction) !in tracking.hidden }.map { (direction, path) ->
@@ -247,6 +259,12 @@ fun MapScreen(apiClient: TransitApiClient, onStopSelected: (Stop) -> Unit) {
                 )
             }
         }
+        val stopPoints = tracking.routes.flatMap { route ->
+            tracking.stops[route.name].orEmpty().filterKeys { (route.name to it) !in tracking.hidden }.flatMap { (direction, list) ->
+                list.map { featureAt(it.lat, it.lon, "id" to it.id, "color" to trackingColour(route.colourIndex, direction).toHexColour()) }
+            }
+        }
+        style.getSourceAs<GeoJsonSource>(TRACK_STOPS_SOURCE)?.setGeoJson(collectionOf(stopPoints))
         style.getSourceAs<GeoJsonSource>(TRACK_LINES_SOURCE)?.setGeoJson(collectionOf(lines))
         style.getSourceAs<GeoJsonSource>(TRACK_BUSES_SOURCE)?.setGeoJson(collectionOf(buses))
     }
@@ -288,6 +306,10 @@ fun MapScreen(apiClient: TransitApiClient, onStopSelected: (Stop) -> Unit) {
                 infoTripId = it
                 return@OnMapClickListener true
             }
+            map.queryRenderedFeatures(screenPoint, TRACK_STOP_LAYER).firstOrNull()?.getStringProperty("id")?.let { stopId ->
+                latestTracking.stops.values.flatMap { it.values }.flatten().firstOrNull { it.id == stopId }?.let(latestOnStopSelected)
+                return@OnMapClickListener true
+            }
             val hit = map.queryRenderedFeatures(screenPoint, CLUSTER_LAYER, STOP_LAYER).firstOrNull()
                 ?: return@OnMapClickListener false
             val point = hit.geometry() as? Point ?: return@OnMapClickListener false
@@ -313,26 +335,26 @@ fun MapScreen(apiClient: TransitApiClient, onStopSelected: (Stop) -> Unit) {
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            if (!tracking.enabled) {
-                FilterChip(
-                    selected = showBuses,
-                    onClick = viewModel::toggleBuses,
-                    label = { Text(if (showBuses) "Buses shown" else "Show buses") },
-                )
-            } else {
-                Text("Following routes", style = MaterialTheme.typography.titleSmall)
-            }
-            Spacer(modifier = Modifier.weight(1f))
+        val modeToggle: @Composable () -> Unit = {
             FilledTonalIconToggleButton(checked = tracking.enabled, onCheckedChange = viewModel::setTracking) {
                 Icon(Icons.Filled.Route, contentDescription = if (tracking.enabled) "Stop following routes" else "Follow routes")
             }
         }
 
-        if (tracking.enabled) {
+        if (!tracking.enabled) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                FilterChip(
+                    selected = showBuses,
+                    onClick = viewModel::toggleBuses,
+                    label = { Text(if (showBuses) "Buses shown" else "Show buses") },
+                )
+                Spacer(modifier = Modifier.weight(1f))
+                modeToggle()
+            }
+        } else {
             TrackingPanel(
                 state = tracking,
                 suggestions = suggestions,
@@ -340,6 +362,8 @@ fun MapScreen(apiClient: TransitApiClient, onStopSelected: (Stop) -> Unit) {
                 onAdd = viewModel::addRoute,
                 onRemove = viewModel::removeRoute,
                 onToggleDirection = viewModel::toggleDirection,
+                onShowStops = viewModel::setShowStops,
+                modeToggle = modeToggle,
             )
         }
 

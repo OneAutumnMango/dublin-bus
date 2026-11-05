@@ -6,6 +6,7 @@ import dev.dublinbustracker.core.LatLon
 import dev.dublinbustracker.core.MAX_TRACKED_ROUTES
 import dev.dublinbustracker.core.Route
 import dev.dublinbustracker.core.Stop
+import dev.dublinbustracker.core.destinationsOf
 import dev.dublinbustracker.core.nextColourIndex
 import dev.dublinbustracker.core.rankRouteSuggestions
 import dev.dublinbustracker.core.VehiclePosition
@@ -46,15 +47,20 @@ data class TrackingUiState(
     val vehicles: Map<String, List<VehiclePosition>> = emptyMap(),
     /** Each route's path, by route name then direction id. */
     val shapes: Map<String, Map<String, List<LatLon>>> = emptyMap(),
-    /** Where each direction of each route ends up, by route then direction id: a label for a direction with no bus right now. */
-    val destinations: Map<String, Map<String, String>> = emptyMap(),
+    /** Each route's stops in order, by route name then direction id. */
+    val stops: Map<String, Map<String, List<Stop>>> = emptyMap(),
+    val showStops: Boolean = true,
     /** (route, direction) pairs switched off in the Directions dropdown. */
     val hidden: Set<Pair<String, String>> = emptySet(),
     val message: String? = null,
     val busy: Boolean = false,
-)
+) {
+    /** Where each direction ends up: a label for a direction with no bus right now. */
+    val destinations: Map<String, Map<String, String>> get() = destinationsOf(stops)
+}
 
-private const val TRACK_REFRESH_MS = 30_000L
+/** The server takes in new positions about once a minute; asking this often keeps the map within a few seconds of it. */
+private const val BUS_REFRESH_MS = 15_000L
 private const val SUGGEST_DEBOUNCE_MS = 250L
 private const val PAN_DEBOUNCE_MS = 400L
 private const val MAX_RADIUS_METERS = 5_000
@@ -92,6 +98,10 @@ class MapViewModel(private val apiClient: TransitApiClient) : ViewModel() {
         }
     }
 
+    fun setShowStops(on: Boolean) {
+        _tracking.update { it.copy(showStops = on) }
+    }
+
     fun toggleDirection(route: String, directionId: String) {
         val key = route to directionId
         _tracking.update { it.copy(hidden = if (key in it.hidden) it.hidden - key else it.hidden + key) }
@@ -105,7 +115,7 @@ class MapViewModel(private val apiClient: TransitApiClient) : ViewModel() {
             trackingJob = viewModelScope.launch {
                 while (true) {
                     if (_tracking.value.routes.isNotEmpty()) refreshTrackedBuses()
-                    delay(TRACK_REFRESH_MS)
+                    delay(BUS_REFRESH_MS)
                 }
             }
         }
@@ -126,16 +136,15 @@ class MapViewModel(private val apiClient: TransitApiClient) : ViewModel() {
                         val shapes = listOf("0", "1").mapNotNull { direction ->
                             runCatching { apiClient.routeShape(name, direction) }.getOrNull()?.let { direction to it }
                         }.toMap()
-                        // Likewise the end of each direction's stops, which names a direction that has no bus yet.
-                        val destinations = listOf("0", "1").mapNotNull { direction ->
-                            runCatching { apiClient.routeStops(name, direction) }.getOrNull()?.lastOrNull()?.let { direction to it.name }
+                        val stops = listOf("0", "1").mapNotNull { direction ->
+                            runCatching { apiClient.routeStops(name, direction) }.getOrNull()?.let { direction to it }
                         }.toMap()
                         _tracking.update { state ->
                             state.copy(
                                 routes = state.routes + TrackedRoute(name, nextColourIndex(state.routes.map { it.colourIndex })),
                                 vehicles = state.vehicles + (name to vehicles),
                                 shapes = state.shapes + (name to shapes),
-                                destinations = state.destinations + (name to destinations),
+                                stops = state.stops + (name to stops),
                                 busy = false,
                             )
                         }
@@ -157,7 +166,7 @@ class MapViewModel(private val apiClient: TransitApiClient) : ViewModel() {
                 routes = it.routes.filterNot { route -> route.name == name },
                 vehicles = it.vehicles - name,
                 shapes = it.shapes - name,
-                destinations = it.destinations - name,
+                stops = it.stops - name,
                 hidden = it.hidden.filterNot { (route, _) -> route == name }.toSet(),
                 message = null,
             )
@@ -182,13 +191,28 @@ class MapViewModel(private val apiClient: TransitApiClient) : ViewModel() {
         }
     }
 
+    private var busRefreshJob: Job? = null
+
     fun toggleBuses() {
         _showBuses.value = !_showBuses.value
+        busRefreshJob?.cancel()
         if (!_showBuses.value) {
             _uiState.value = _uiState.value.copy(vehicles = emptyList())
         } else {
             lastViewport?.let { viewport -> viewModelScope.launch { load(viewport) } }
+            // Keep the buses moving without the user having to pan or re-toggle.
+            busRefreshJob = viewModelScope.launch {
+                while (true) {
+                    delay(BUS_REFRESH_MS)
+                    lastViewport?.let { viewport -> refreshVehicles(viewport) }
+                }
+            }
         }
+    }
+
+    private suspend fun refreshVehicles(viewport: Viewport) {
+        runCatching { apiClient.vehiclesInBox(viewport.minLat, viewport.minLon, viewport.maxLat, viewport.maxLon) }
+            .onSuccess { vehicles -> _uiState.value = _uiState.value.copy(vehicles = vehicles) }
     }
 
     fun refresh() {
