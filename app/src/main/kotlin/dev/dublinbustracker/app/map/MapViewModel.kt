@@ -85,9 +85,9 @@ private const val SUGGEST_DEBOUNCE_MS = 250L
 private const val PAN_DEBOUNCE_MS = 400L
 private const val MAX_RADIUS_METERS = 5_000
 
-/** Below this zoom stops are too close together to label. */
-private const val STOP_TIMES_MIN_ZOOM = 15.0
-private const val STOP_TIMES_MAX_STOPS = 10
+/** Below this the whole city is a few screens wide and a label per stop would be noise; that is roughly a followed route fitted to the screen. */
+private const val STOP_TIMES_MIN_ZOOM = 10.5
+private const val STOP_TIMES_MAX_STOPS = 20
 private const val STOP_TIMES_MAX_AGE_MS = 60_000L
 
 class MapViewModel(

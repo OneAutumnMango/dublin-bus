@@ -63,13 +63,13 @@ fun busesUpToStop(stops: List<Stop>, viewedStopId: String, buses: List<VehiclePo
 }
 
 /**
- * The small print on a stop: for each route, its next arrivals as they would read on the stop's own screen
- * ("5 min", or the timetable time for a scheduled one). Routes with nothing coming are left out; null if none have.
+ * The small print on a stop: for each route, its next two arrivals as they would read on the stop's own screen
+ * ("5 min", or the timetable time for a scheduled one), one to a line and each led by its route ("4: 5 min").
+ * Routes with nothing coming are left out; null if none have.
  */
 fun stopTimesLabel(perRoute: List<Pair<String, List<Arrival>>>, nowEpochSeconds: Long, zone: ZoneId): String? =
     perRoute
         .filter { (_, arrivals) -> arrivals.isNotEmpty() }
-        .joinToString("\n") { (route, arrivals) ->
-            "$route: " + arrivals.take(2).joinToString(", ") { it.display(nowEpochSeconds, zone).headline }
-        }
+        .flatMap { (route, arrivals) -> arrivals.take(2).map { "$route: ${it.display(nowEpochSeconds, zone).headline}" } }
+        .joinToString("\n")
         .ifEmpty { null }

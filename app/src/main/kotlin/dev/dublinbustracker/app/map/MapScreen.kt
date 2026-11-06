@@ -152,7 +152,9 @@ fun MapScreen(apiClient: TransitApiClient, mapStartStore: MapStartStore, routePr
             // The map shows the city centre until the fix arrives; no fix leaves it there.
             requestCurrentLocation(context) { fix ->
                 runCatching {
-                    handle.map?.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(fix.latitude, fix.longitude), MY_LOCATION_ZOOM))
+                    // The fix can arrive seconds later; by then the user may have moved the map, and it mustn't be yanked back.
+                    val still = handle.map?.cameraPosition?.target?.let { it.latitude == opensAt.latitude && it.longitude == opensAt.longitude } == true
+                    if (still) handle.map?.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(fix.latitude, fix.longitude), MY_LOCATION_ZOOM))
                 }
             }
         }
@@ -468,7 +470,7 @@ fun MapScreen(apiClient: TransitApiClient, mapStartStore: MapStartStore, routePr
 
             MapCompass(handle, modifier = Modifier.align(Alignment.TopEnd).padding(16.dp))
             MapMenu(modifier = Modifier.align(Alignment.TopEnd).padding(top = 68.dp, end = 16.dp)) { close ->
-                MapToggle("Next 2 times at stops (zoom in)", tracking.showStopTimes, viewModel::setShowStopTimes)
+                MapToggle("Next 2 times at stops", tracking.showStopTimes, viewModel::setShowStopTimes)
                 DropdownMenuItem(text = { Text("Route profiles...") }, onClick = { close(); showProfiles = true })
             }
 
