@@ -85,3 +85,7 @@ on the map, and it shows the size before you download. Delete areas there too.
 - Pushing a tag like `1.2.3` runs `.github/workflows/release.yml`: tests, then one signed APK per CPU (needs repo secrets `KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`).
 - `./scripts/release-apk.sh <feature-slug>` builds a debug APK into `apks/` (gitignored) for
   manual testing; each feature gets its own APK and commit.
+
+## Credits
+
+App icon: "Cute orange bus" by Fikri Azhari, from [Vecteezy.com](https://www.vecteezy.com) (free licence, attribution required).

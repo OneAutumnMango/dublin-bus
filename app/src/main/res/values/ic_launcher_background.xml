@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Matches the artwork's own off-white background so the picture has no visible edge. -->
+    <color name="ic_launcher_background">#FDFDFD</color>
+</resources>
