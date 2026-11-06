@@ -44,4 +44,21 @@ class WidgetConfigTest {
         assertEquals(listOf("4", "S8"), keepRoutes(buses, setOf("s8", "4")) { it })
         assertEquals(buses, keepRoutes(buses, emptySet()) { it })
     }
+
+    @Test
+    fun `a favourite excluded from widgets is never picked, however near`() {
+        val near = fav("near", 53.3500, -6.2600).copy(excludedFromWidgets = true)
+        val far = fav("far", 53.4000, -6.3000)
+
+        assertEquals("far", nearestFavourite(listOf(near, far), emptySet(), here)?.first?.id)
+        assertNull(nearestFavourite(listOf(near), emptySet(), here))
+    }
+
+    @Test
+    fun `hidden buses are dropped, ignoring case, and none hidden drops nothing`() {
+        val buses = listOf("4", "S8", "15A")
+
+        assertEquals(listOf("4"), dropRoutes(buses, setOf("s8", "15a")) { it })
+        assertEquals(buses, dropRoutes(buses, emptySet()) { it })
+    }
 }

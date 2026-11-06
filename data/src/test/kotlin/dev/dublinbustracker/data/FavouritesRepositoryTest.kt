@@ -159,4 +159,20 @@ class FavouritesRepositoryTest {
         assertEquals("Work", repository.favourites.value.single().nickname)
         assertEquals("Work", FavouritesRepository(storage).favourites.value.single().nickname)
     }
+
+    @Test
+    fun `widget exclusions survive a refresh of the stop details and a restart`() {
+        val storage = FakeStorage()
+        val repository = FavouritesRepository(storage)
+        repository.toggle(trinity)
+
+        repository.setExcludedFromWidgets("s1", true)
+        repository.setHiddenRoutes("s1", setOf("15", "4"))
+        repository.updateDetails(trinity.copy(name = "Trinity College East"))
+
+        val stored = FavouritesRepository(storage).favourites.value.single()
+        assertTrue(stored.excludedFromWidgets)
+        assertEquals(setOf("15", "4"), stored.hiddenRoutes)
+        assertEquals("Trinity College East", stored.name)
+    }
 }

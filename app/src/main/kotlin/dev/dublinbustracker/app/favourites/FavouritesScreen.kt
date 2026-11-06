@@ -4,6 +4,18 @@ import android.content.Context
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
+import kotlinx.coroutines.launch
+import dev.dublinbustracker.app.widget.refreshAllWidgets
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.produceState
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.Checkbox
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
@@ -63,6 +75,12 @@ fun FavouritesScreen(
     var here by remember { mutableStateOf<LatLon?>(null) }
     var status by remember { mutableStateOf<String?>(null) }
     var renaming by remember { mutableStateOf<FavouriteStop?>(null) }
+    var hidingBuses by remember { mutableStateOf<FavouriteStop?>(null) }
+    val scope = rememberCoroutineScope()
+    // Widgets already on the home screen should pick up a change straight away rather than at their next poll.
+    fun widgetsChanged() {
+        scope.launch { runCatching { refreshAllWidgets(context) } }
+    }
 
     fun setNearestFirst(on: Boolean) {
         nearestFirst = on
@@ -152,6 +170,19 @@ fun FavouritesScreen(
         )
     }
 
+    hidingBuses?.let { target ->
+        HideBusesDialog(
+            apiClient = apiClient,
+            favourite = target,
+            onSave = {
+                favouritesRepository.setHiddenRoutes(target.id, it)
+                hidingBuses = null
+                widgetsChanged()
+            },
+            onDismiss = { hidingBuses = null },
+        )
+    }
+
     Column(modifier = Modifier.fillMaxSize()) {
         FilterChip(
             selected = nearestFirst,
@@ -178,6 +209,9 @@ fun FavouritesScreen(
                                     meters?.let(::distanceText),
                                 ).joinToString(" · "),
                             )
+                            widgetNote(favourite)?.let {
+                                Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                            }
                             if (favourite.headings.isNotEmpty()) {
                                 // e.g. "4 (W)  L25 (W)  L27 (SW)": each bus number and the way it goes from this stop.
                                 Text(
@@ -189,11 +223,81 @@ fun FavouritesScreen(
                         }
                     },
                     trailingContent = {
-                        IconButton(onClick = { renaming = favourite }) { Icon(Icons.Filled.Edit, contentDescription = "Rename") }
+                        FavouriteMenu(
+                            favourite,
+                            onRename = { renaming = favourite },
+                            onToggleExcluded = {
+                                favouritesRepository.setExcludedFromWidgets(favourite.id, !favourite.excludedFromWidgets)
+                                widgetsChanged()
+                            },
+                            onChooseBuses = { hidingBuses = favourite },
+                        )
                         FavouriteStarButton(isFavourite = true, onToggle = { favouritesRepository.remove(favourite.id) })
                     },
                 )
             }
         }
     }
+}
+
+/** What is switched off for widgets on this favourite, if anything. */
+private fun widgetNote(favourite: FavouriteStop): String? = listOfNotNull(
+    "Not shown in widgets".takeIf { favourite.excludedFromWidgets },
+    "Hiding ${favourite.hiddenRoutes.sorted().joinToString(", ")} in widgets".takeIf { favourite.hiddenRoutes.isNotEmpty() },
+).joinToString(" · ").ifEmpty { null }
+
+/** The three dots on a favourite: rename it, and what widgets may do with it. */
+@Composable
+private fun FavouriteMenu(favourite: FavouriteStop, onRename: () -> Unit, onToggleExcluded: () -> Unit, onChooseBuses: () -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { open = true }) { Icon(Icons.Filled.MoreVert, contentDescription = "More options") }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            DropdownMenuItem(
+                text = { Text("Rename") },
+                leadingIcon = { Icon(Icons.Filled.Edit, contentDescription = null) },
+                onClick = { open = false; onRename() },
+            )
+            DropdownMenuItem(
+                text = { Text("Exclude from widgets") },
+                leadingIcon = { Checkbox(checked = favourite.excludedFromWidgets, onCheckedChange = null) },
+                onClick = { open = false; onToggleExcluded() },
+            )
+            DropdownMenuItem(
+                text = { Text("Hide buses in widgets...") },
+                onClick = { open = false; onChooseBuses() },
+            )
+        }
+    }
+}
+
+/** Pick the buses that never show in widgets for a favourite, from the buses that serve its stop. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun HideBusesDialog(apiClient: TransitApiClient, favourite: FavouriteStop, onSave: (Set<String>) -> Unit, onDismiss: () -> Unit) {
+    var hidden by remember(favourite.id) { mutableStateOf(favourite.hiddenRoutes) }
+    val routes by produceState(favourite.headings.map { it.route }, favourite.id) {
+        value = runCatching { apiClient.stop(favourite.id).routes }.getOrDefault(value)
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Hide buses in widgets") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("Ticked buses never show in a widget for this stop.", style = MaterialTheme.typography.bodyMedium)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    // A bus already hidden stays listed even if the stop no longer reports it, so it can be switched back on.
+                    (routes + hidden).distinct().forEach { route ->
+                        FilterChip(
+                            selected = route in hidden,
+                            onClick = { hidden = if (route in hidden) hidden - route else hidden + route },
+                            label = { Text(route) },
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = { onSave(hidden) }) { Text("Save") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
 }

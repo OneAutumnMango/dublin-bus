@@ -32,17 +32,24 @@ data class WidgetConfig(
     }
 }
 
-/** The favourite closest to [here] that isn't excluded, with its distance in metres. A favourite with no known position is never picked. */
+/**
+ * The favourite closest to [here] that isn't excluded - by this widget's own list or by being excluded from widgets
+ * altogether - with its distance in metres. A favourite with no known position is never picked.
+ */
 fun nearestFavourite(
     favourites: List<FavouriteStop>,
     excludedStopIds: Set<String>,
     here: LatLon,
 ): Pair<FavouriteStop, Double>? =
     favourites
-        .filter { it.id !in excludedStopIds && !(it.lat == 0.0 && it.lon == 0.0) }
+        .filter { it.id !in excludedStopIds && !it.excludedFromWidgets && !(it.lat == 0.0 && it.lon == 0.0) }
         .map { it to distanceMeters(here, LatLon(it.lat, it.lon)) }
         .minByOrNull { it.second }
 
 /** [arrivals] limited to the buses in [routes] (all of them if it's empty), compared ignoring case. */
 fun <T> keepRoutes(arrivals: List<T>, routes: Set<String>, routeOf: (T) -> String): List<T> =
     if (routes.isEmpty()) arrivals else arrivals.filter { arrival -> routes.any { it.equals(routeOf(arrival), ignoreCase = true) } }
+
+/** [arrivals] without the buses in [hidden], compared ignoring case. */
+fun <T> dropRoutes(arrivals: List<T>, hidden: Set<String>, routeOf: (T) -> String): List<T> =
+    if (hidden.isEmpty()) arrivals else arrivals.filterNot { arrival -> hidden.any { it.equals(routeOf(arrival), ignoreCase = true) } }

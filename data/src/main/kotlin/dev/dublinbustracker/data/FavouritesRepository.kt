@@ -20,6 +20,10 @@ data class FavouriteStop(
     val headings: List<FavouriteHeading> = emptyList(),
     /** The user's own name for the stop; blank means show the official one. */
     val nickname: String = "",
+    /** A nearest-favourite widget never picks this stop. */
+    val excludedFromWidgets: Boolean = false,
+    /** Buses that never appear in widgets showing this stop. */
+    val hiddenRoutes: Set<String> = emptySet(),
 ) {
     /** True for entries migrated from the old id-only format, which the UI backfills. */
     val needsDetails: Boolean get() = name.isBlank()
@@ -67,11 +71,17 @@ class FavouritesRepository(private val storage: FavouritesStorage) {
     fun rename(stopId: String, nickname: String) =
         publish(_favourites.value.map { if (it.id == stopId) it.copy(nickname = nickname.trim()) else it })
 
+    fun setExcludedFromWidgets(stopId: String, excluded: Boolean) =
+        publish(_favourites.value.map { if (it.id == stopId) it.copy(excludedFromWidgets = excluded) else it })
+
+    fun setHiddenRoutes(stopId: String, routes: Set<String>) =
+        publish(_favourites.value.map { if (it.id == stopId) it.copy(hiddenRoutes = routes) else it })
+
     fun remove(stopId: String) = publish(_favourites.value.filterNot { it.id == stopId })
 
     /** Fills in or refreshes a favourite once the server has supplied its details. */
     fun updateDetails(stop: Stop) {
-        val updated = _favourites.value.map { if (it.id == stop.id) FavouriteStop.of(stop).copy(nickname = it.nickname) else it }
+        val updated = _favourites.value.map { if (it.id == stop.id) FavouriteStop.of(stop).copy(nickname = it.nickname, excludedFromWidgets = it.excludedFromWidgets, hiddenRoutes = it.hiddenRoutes) else it }
         // Details are refreshed on every visit; only write when something actually changed.
         if (updated != _favourites.value) publish(updated)
     }

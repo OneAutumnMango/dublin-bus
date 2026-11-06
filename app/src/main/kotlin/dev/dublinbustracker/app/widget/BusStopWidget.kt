@@ -51,6 +51,7 @@ import dev.dublinbustracker.core.Arrival
 import dev.dublinbustracker.core.distanceText
 import dev.dublinbustracker.data.WidgetConfig
 import dev.dublinbustracker.data.WidgetMode
+import dev.dublinbustracker.data.dropRoutes
 import dev.dublinbustracker.data.keepRoutes
 import dev.dublinbustracker.data.nearestFavourite
 import java.time.LocalTime
@@ -127,10 +128,12 @@ private suspend fun resolve(context: Context, container: AppContainer, config: W
         }
     }
     val arrivals = runCatching { container.apiClient.arrivals(stopId, limit = 20) }.getOrNull() ?: return WidgetView.Unreachable
+    // Buses the user hid for this favourite never show, in either mode.
+    val hidden = container.favouritesRepository.favourites.value.firstOrNull { it.id == stopId }?.hiddenRoutes.orEmpty()
     return WidgetView.Arrivals(
         title,
         subtitle,
-        keepRoutes(arrivals, config.routes) { it.routeShortName }.take(SHOWN_ARRIVALS),
+        dropRoutes(keepRoutes(arrivals, config.routes) { it.routeShortName }, hidden) { it.routeShortName }.take(SHOWN_ARRIVALS),
         refreshedAt = REFRESHED_FORMAT.format(LocalTime.now()),
     )
 }

@@ -189,23 +189,34 @@ private fun FavouriteChoice(container: AppContainer, onBack: () -> Unit, onDone:
         } else {
             LazyColumn(modifier = Modifier.weight(1f)) {
                 items(favourites, key = { it.id }) { favourite ->
+                    // One already excluded from widgets in Favourites can't be switched back on here.
+                    val locked = favourite.excludedFromWidgets
                     Row(
-                        modifier = Modifier.fillMaxWidth().clickable {
+                        modifier = Modifier.fillMaxWidth().clickable(enabled = !locked) {
                             excluded = if (favourite.id in excluded) excluded - favourite.id else excluded + favourite.id
                         }.padding(horizontal = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Checkbox(checked = favourite.id !in excluded, onCheckedChange = null, modifier = Modifier.padding(12.dp))
+                        Checkbox(
+                            checked = favourite.id !in excluded && !locked,
+                            onCheckedChange = null,
+                            enabled = !locked,
+                            modifier = Modifier.padding(12.dp),
+                        )
                         Column {
                             Text(favourite.nickname.ifBlank { favourite.name.ifBlank { favourite.id } }, style = MaterialTheme.typography.bodyLarge)
-                            Text("Stop ${favourite.code.ifBlank { "-" }}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(
+                                "Stop ${favourite.code.ifBlank { "-" }}" + if (locked) " · excluded from widgets in Favourites" else "",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
                         }
                     }
                 }
             }
         }
         Button(
-            enabled = favourites.any { it.id !in excluded },
+            enabled = favourites.any { it.id !in excluded && !it.excludedFromWidgets },
             onClick = { onDone(excluded) },
             modifier = Modifier.fillMaxWidth().padding(16.dp),
         ) { Text("Add widget") }
