@@ -1,8 +1,6 @@
 package dev.dublinbustracker.app.map
 
-import android.Manifest
 import android.content.Context
-import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
@@ -11,6 +9,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.material.icons.filled.Route
 import androidx.compose.material3.FilledTonalIconToggleButton
 import dev.dublinbustracker.app.bus.BusInfoSheet
+import dev.dublinbustracker.app.location.LOCATION_PERMISSIONS
+import dev.dublinbustracker.app.location.hasLocationPermission
 import dev.dublinbustracker.app.location.requestCurrentLocation
 import dev.dublinbustracker.app.ui.PollWhileVisible
 import dev.dublinbustracker.core.OkabeIto
@@ -54,7 +54,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
@@ -121,9 +120,9 @@ fun MapScreen(apiClient: TransitApiClient, onStopSelected: (Stop) -> Unit) {
 
     var pendingLocationRequest by remember { mutableStateOf(false) }
     val locationPermissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission(),
-    ) { granted ->
-        if (granted && pendingLocationRequest) handle.map?.let { seekToCurrentLocation(context, it) }
+        ActivityResultContracts.RequestMultiplePermissions(),
+    ) { results ->
+        if (results.values.any { it } && pendingLocationRequest) handle.map?.let { seekToCurrentLocation(context, it) }
         pendingLocationRequest = false
     }
 
@@ -386,15 +385,11 @@ fun MapScreen(apiClient: TransitApiClient, onStopSelected: (Stop) -> Unit) {
 
             FloatingActionButton(
                 onClick = {
-                    val hasPermission = ContextCompat.checkSelfPermission(
-                        context,
-                        Manifest.permission.ACCESS_FINE_LOCATION,
-                    ) == PackageManager.PERMISSION_GRANTED
-                    if (hasPermission) {
+                    if (hasLocationPermission(context)) {
                         handle.map?.let { seekToCurrentLocation(context, it) }
                     } else {
                         pendingLocationRequest = true
-                        locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+                        locationPermissionLauncher.launch(LOCATION_PERMISSIONS)
                     }
                 },
                 modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),

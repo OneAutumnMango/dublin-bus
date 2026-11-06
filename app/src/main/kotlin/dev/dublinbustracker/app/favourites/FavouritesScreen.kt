@@ -1,8 +1,6 @@
 package dev.dublinbustracker.app.favourites
 
-import android.Manifest
 import android.content.Context
-import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
@@ -27,8 +25,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
 import androidx.core.content.edit
+import dev.dublinbustracker.app.location.LOCATION_PERMISSIONS
+import dev.dublinbustracker.app.location.hasLocationPermission
 import dev.dublinbustracker.app.location.requestCurrentLocation
 import dev.dublinbustracker.app.ui.AppListItem
 import dev.dublinbustracker.core.LatLon
@@ -74,8 +73,8 @@ fun FavouritesScreen(
         }
     }
 
-    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) {
+    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { results ->
+        if (results.values.any { it }) {
             locate()
         } else {
             setNearestFirst(false)
@@ -89,9 +88,7 @@ fun FavouritesScreen(
             status = null
             return@LaunchedEffect
         }
-        val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) ==
-            PackageManager.PERMISSION_GRANTED
-        if (granted) locate() else permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+        if (hasLocationPermission(context)) locate() else permissionLauncher.launch(LOCATION_PERMISSIONS)
     }
 
     // Each visit asks the server for every favourite's current details: a name for entries from the
