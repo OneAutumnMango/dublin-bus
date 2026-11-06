@@ -27,6 +27,14 @@ extensions.configure<ApplicationExtension> {
         compose = true
     }
 
+    // One APK per CPU instead of one fat multi-arch APK; the release workflow passes -PsplitAbi.
+    splits.abi {
+        isEnable = providers.gradleProperty("splitAbi").isPresent
+        reset()
+        include("arm64-v8a", "armeabi-v7a", "x86_64", "x86")
+        isUniversalApk = false
+    }
+
     testOptions {
         // Robolectric needs real resources rather than the stubbed android.jar.
         unitTests.isIncludeAndroidResources = true

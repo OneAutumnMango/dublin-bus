@@ -82,5 +82,6 @@ on the map, and it shows the size before you download. Delete areas there too.
   when the server is unreachable.
 - Stop detail refreshes every 30s. The server only refreshes from NTA every 30–60s, so that is
   the real limit on freshness; polling faster gains nothing but costs the server nothing either.
+- Pushing a tag like `1.2.3` runs `.github/workflows/release.yml`: tests, then one signed APK per CPU (needs repo secrets `KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`).
 - `./scripts/release-apk.sh <feature-slug>` builds a debug APK into `apks/` (gitignored) for
   manual testing; each feature gets its own APK and commit.
