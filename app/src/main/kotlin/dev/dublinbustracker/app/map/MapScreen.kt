@@ -14,6 +14,7 @@ import dev.dublinbustracker.app.location.hasLocationPermission
 import dev.dublinbustracker.app.location.requestCurrentLocation
 import dev.dublinbustracker.app.ui.PollWhileVisible
 import dev.dublinbustracker.core.OkabeIto
+import dev.dublinbustracker.core.headingAlongPath
 import dev.dublinbustracker.core.toHexColour
 import dev.dublinbustracker.core.trackingColour
 import dev.dublinbustracker.core.trackingTextColour
@@ -270,7 +271,12 @@ fun MapScreen(apiClient: TransitApiClient, mapStartStore: MapStartStore, onStopS
                     "color" to trackingColour(route.colourIndex, bus.directionId).toHexColour(),
                     "textColor" to trackingTextColour(route.colourIndex, bus.directionId).toHexColour(),
                     "tripId" to bus.tripId,
-                    *style.busProperties(trackingColour(route.colourIndex, bus.directionId), density, bus.bearing),
+                    *style.busProperties(
+                        trackingColour(route.colourIndex, bus.directionId),
+                        density,
+                        // The route's own path says which way it is facing; the feed's heading is the fallback.
+                        tracking.shapes[route.name]?.get(bus.directionId)?.let { headingAlongPath(it, bus.position) } ?: bus.bearing,
+                    ),
                 )
             }
         }

@@ -96,4 +96,14 @@ class ProximityTest {
         assertEquals(180.0, bearingDegrees(dublin, LatLon(dublin.lat - 0.1, dublin.lon)), 0.01)
         assertTrue(bearingDegrees(dublin, LatLon(dublin.lat, dublin.lon - 0.1)) in 269.0..271.0)
     }
+
+    @Test
+    fun `a vehicle on a path faces along it, and one far from it has no heading`() {
+        val path = listOf(LatLon(53.0, -6.00), LatLon(53.0, -5.99), LatLon(53.0, -5.98), LatLon(53.01, -5.98))
+
+        assertEquals(90f, headingAlongPath(path, LatLon(53.0, -5.9951))!!, 1f)
+        assertEquals(0f, headingAlongPath(path, LatLon(53.005, -5.98))!!, 1f)
+        assertEquals(null, headingAlongPath(path, LatLon(53.2, -6.5)))
+        assertEquals(null, headingAlongPath(emptyList(), LatLon(53.0, -6.0)))
+    }
 }

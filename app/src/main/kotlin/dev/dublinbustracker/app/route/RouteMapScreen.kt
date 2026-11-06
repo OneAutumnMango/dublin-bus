@@ -54,6 +54,7 @@ import dev.dublinbustracker.app.map.rememberMapHandle
 import dev.dublinbustracker.app.map.showUserLocation
 import dev.dublinbustracker.core.Arrival
 import dev.dublinbustracker.core.OkabeIto
+import dev.dublinbustracker.core.headingAlongPath
 import dev.dublinbustracker.core.readableTextOn
 import dev.dublinbustracker.core.Stop
 import dev.dublinbustracker.core.toHexColour
@@ -240,7 +241,11 @@ fun RouteMapScreen(stop: Stop, arrival: Arrival, apiClient: TransitApiClient, on
                         "textColor" to readableTextOn(if (yours) YOUR_BUS_COLOR else OTHER_BUS_COLOR).toHexColour(),
                         "tripId" to vehicle.tripId,
                         "title" to "${vehicle.routeShortName} to ${vehicle.headsign}" + if (yours) " (your bus)" else "",
-                        *style.busProperties(if (yours) YOUR_BUS_COLOR else OTHER_BUS_COLOR, density, vehicle.bearing),
+                        *style.busProperties(
+                            if (yours) YOUR_BUS_COLOR else OTHER_BUS_COLOR,
+                            density,
+                            state.data?.shape?.let { headingAlongPath(it, vehicle.position) } ?: vehicle.bearing,
+                        ),
                     )
                 },
             ),

@@ -123,33 +123,34 @@ fun MapLibreMap.showUserLocation(context: Context, style: Style) {
     }
 }
 
-private const val BUS_RADIUS_DP = 15f
+/** Half the arrow's width: with the nose beyond it, the arrow is about the size of the round marker it replaces. */
+private const val ARROW_HALF_WIDTH_DP = 16f
 
-/** The round bus marker with a pointer on the side it is travelling towards, drawn pointing up; the layer turns it. */
+/**
+ * A bus as an arrowhead in its route's colour, drawn pointing up (the layer turns it to the bus's heading). The
+ * bitmap's centre sits in the arrow's solid body so the route number, which stays upright, always lands on it.
+ */
 private fun busArrowBitmap(colour: Int, density: Float): Bitmap {
-    val size = (2 * (BUS_RADIUS_DP + 7) * density).toInt()
+    val r = ARROW_HALF_WIDTH_DP * density
+    val size = (2 * (1.4f * ARROW_HALF_WIDTH_DP + 4) * density).toInt() // room for the nose and outline at any turn
     val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bitmap)
     val c = size / 2f
-    val r = BUS_RADIUS_DP * density
-    val pointer = Path().apply {
-        moveTo(c, c - r - 6 * density)
-        lineTo(c + 9 * density, c - 12 * density)
-        lineTo(c - 9 * density, c - 12 * density)
+    val arrow = Path().apply {
+        moveTo(c, c - 1.4f * r) // the nose
+        lineTo(c + r, c + 0.7f * r)
+        lineTo(c, c + 0.4f * r) // the notch in the tail
+        lineTo(c - r, c + 0.7f * r)
         close()
     }
-    // White outline first (a stroke around both shapes), then the colour on top.
     val outline = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL_AND_STROKE
         color = android.graphics.Color.WHITE
         strokeWidth = 4 * density
         strokeJoin = Paint.Join.ROUND
     }
-    canvas.drawPath(pointer, outline)
-    canvas.drawCircle(c, c, r, outline)
-    val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = colour }
-    canvas.drawPath(pointer, fill)
-    canvas.drawCircle(c, c, r, fill)
+    canvas.drawPath(arrow, outline)
+    canvas.drawPath(arrow, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = colour })
     return bitmap
 }
 
@@ -164,7 +165,7 @@ private fun Style.busArrowImage(colour: Int, density: Float): String {
 fun Style.busProperties(colour: Int, density: Float, bearing: Float?): Array<Pair<String, Any>> =
     listOfNotNull<Pair<String, Any>>("icon" to busArrowImage(colour, density), bearing?.let { "bearing" to it }).toTypedArray()
 
-/** Buses that have a heading, drawn as the arrow marker turned to face it; the round layer beneath shows the rest. */
+/** Buses that have a heading, drawn as the arrow turned to face it; the round layer beneath shows any that don't. */
 fun busArrowLayer(id: String, source: String): SymbolLayer =
     SymbolLayer(id, source).withFilter(Expression.has("bearing")).withProperties(
         iconImage(Expression.get("icon")),
