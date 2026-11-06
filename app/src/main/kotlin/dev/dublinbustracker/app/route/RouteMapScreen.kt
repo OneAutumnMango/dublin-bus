@@ -33,6 +33,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -183,7 +184,7 @@ fun RouteMapScreen(stop: Stop, arrival: Arrival, apiClient: TransitApiClient, on
         )
         style.addLayer(
             CircleLayer(SELECTED_LAYER, SELECTED_SOURCE).withProperties(
-                circleColor(THIS_STOP_COLOR), circleStrokeColor(android.graphics.Color.WHITE), circleStrokeWidth(3f), circleRadius(11f),
+                circleColor(THIS_STOP_COLOR), circleStrokeColor(android.graphics.Color.WHITE), circleStrokeWidth(zoomScaled(1.5f, 3f)), circleRadius(zoomScaled(3.5f, 8f)),
             ),
         )
     }
