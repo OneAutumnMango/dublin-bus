@@ -1,5 +1,6 @@
 package dev.dublinbustracker.app.map
 
+import android.content.Context
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
@@ -25,11 +26,14 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.content.edit
 import dev.dublinbustracker.core.OkabeIto
 import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.maps.MapLibreMap
 
+private const val NORTH_LOCKED = "north_locked"
 private val NORTH_RED = Color(OkabeIto.VERMILLION)
 private val SOUTH_GREY = Color(0xFF9E9E9E)
 private val LOCK_GREY = Color(0xFFBDBDBD)
@@ -42,7 +46,8 @@ private val LOCK_GREY = Color(0xFFBDBDBD)
 @Composable
 fun MapCompass(handle: MapHandle, modifier: Modifier = Modifier) {
     var bearing by remember { mutableFloatStateOf(0f) }
-    var locked by remember { mutableStateOf(false) }
+    val prefs = LocalContext.current.getSharedPreferences("map_ui", Context.MODE_PRIVATE)
+    var locked by remember { mutableStateOf(prefs.getBoolean(NORTH_LOCKED, false)) }
 
     DisposableEffect(handle.map) {
         val map = handle.map ?: return@DisposableEffect onDispose { }
@@ -64,7 +69,10 @@ fun MapCompass(handle: MapHandle, modifier: Modifier = Modifier) {
             .size(44.dp)
             .combinedClickable(
                 onClick = { handle.map?.animateCamera(CameraUpdateFactory.bearingTo(0.0), 300) },
-                onDoubleClick = { locked = !locked },
+                onDoubleClick = {
+                    locked = !locked
+                    prefs.edit { putBoolean(NORTH_LOCKED, locked) }
+                },
             ),
         shape = CircleShape,
         shadowElevation = 4.dp,
