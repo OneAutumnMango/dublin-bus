@@ -41,6 +41,8 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import dev.dublinbustracker.app.bus.BusInfoSheet
 import dev.dublinbustracker.app.map.MAP_BLUE
+import dev.dublinbustracker.app.map.BUS_LABEL_SIZE_SP
+import dev.dublinbustracker.app.map.BUS_CIRCLE_RADIUS_DP
 import dev.dublinbustracker.app.map.MapCompass
 import dev.dublinbustracker.app.ui.PollWhileVisible
 import dev.dublinbustracker.app.ui.ScreenHeader
@@ -181,13 +183,13 @@ fun RouteMapScreen(stop: Stop, arrival: Arrival, apiClient: TransitApiClient, on
                         Expression.color(OTHER_BUS_COLOR),
                     ),
                 ),
-                circleStrokeColor(android.graphics.Color.WHITE), circleStrokeWidth(2f), circleRadius(15f),
+                circleStrokeColor(android.graphics.Color.WHITE), circleStrokeWidth(2f), circleRadius(BUS_CIRCLE_RADIUS_DP),
             ),
         )
         style.addLayer(busArrowLayer(BUS_ARROWS_LAYER, BUSES_SOURCE))
         style.addLayer(
             SymbolLayer("route-bus-labels", BUSES_SOURCE).withProperties(
-                textField(Expression.get("label")), textFont(MAP_BOLD_FONT), textSize(11f),
+                textField(Expression.get("label")), textFont(MAP_BOLD_FONT), textSize(BUS_LABEL_SIZE_SP),
                 textColor(Expression.toColor(Expression.get("textColor"))), textAllowOverlap(true),
             ),
         )

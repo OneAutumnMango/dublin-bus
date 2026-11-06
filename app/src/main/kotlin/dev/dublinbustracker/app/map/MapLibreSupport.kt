@@ -123,8 +123,15 @@ fun MapLibreMap.showUserLocation(context: Context, style: Style) {
     }
 }
 
-/** Half the arrow's width: with the nose beyond it, the arrow is about the size of the round marker it replaces. */
-private const val ARROW_HALF_WIDTH_DP = 16f
+/** Bus markers are drawn at this fraction of their original size (about a third smaller). */
+private const val BUS_MARKER_SCALE = 0.65f
+
+/** Half the arrow's width; the nose reaches beyond it. */
+private const val ARROW_HALF_WIDTH_DP = 16f * BUS_MARKER_SCALE
+
+/** The round marker for a bus with no known heading, and the route number written on either kind. */
+const val BUS_CIRCLE_RADIUS_DP = 15f * BUS_MARKER_SCALE
+const val BUS_LABEL_SIZE_SP = 11f * BUS_MARKER_SCALE + 1f // text can't shrink as far as the marker and stay readable
 
 /**
  * A bus as an arrowhead in its route's colour, drawn pointing up (the layer turns it to the bus's heading). The
@@ -132,7 +139,7 @@ private const val ARROW_HALF_WIDTH_DP = 16f
  */
 private fun busArrowBitmap(colour: Int, density: Float): Bitmap {
     val r = ARROW_HALF_WIDTH_DP * density
-    val size = (2 * (1.4f * ARROW_HALF_WIDTH_DP + 4) * density).toInt() // room for the nose and outline at any turn
+    val size = (2 * (1.4f * ARROW_HALF_WIDTH_DP + 3) * density).toInt() // room for the nose and outline at any turn
     val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bitmap)
     val c = size / 2f
@@ -146,7 +153,7 @@ private fun busArrowBitmap(colour: Int, density: Float): Bitmap {
     val outline = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL_AND_STROKE
         color = android.graphics.Color.WHITE
-        strokeWidth = 4 * density
+        strokeWidth = 3 * density
         strokeJoin = Paint.Join.ROUND
     }
     canvas.drawPath(arrow, outline)

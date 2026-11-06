@@ -190,7 +190,7 @@ fun MapScreen(apiClient: TransitApiClient, mapStartStore: MapStartStore, onStopS
                 circleColor(BUS_ORANGE),
                 circleStrokeColor(android.graphics.Color.WHITE),
                 circleStrokeWidth(2f),
-                circleRadius(15f),
+                circleRadius(BUS_CIRCLE_RADIUS_DP),
             ),
         )
         style.addLayer(busArrowLayer("bus-arrows", BUSES_SOURCE))
@@ -198,7 +198,7 @@ fun MapScreen(apiClient: TransitApiClient, mapStartStore: MapStartStore, onStopS
             SymbolLayer("bus-labels", BUSES_SOURCE).withProperties(
                 textField(Expression.get("label")),
                 textFont(MAP_BOLD_FONT),
-                textSize(11f),
+                textSize(BUS_LABEL_SIZE_SP),
                 textColor(android.graphics.Color.BLACK),
                 textAllowOverlap(true),
             ),
@@ -230,7 +230,7 @@ fun MapScreen(apiClient: TransitApiClient, mapStartStore: MapStartStore, onStopS
                 circleColor(Expression.toColor(Expression.get("color"))),
                 circleStrokeColor(android.graphics.Color.WHITE),
                 circleStrokeWidth(2f),
-                circleRadius(15f),
+                circleRadius(BUS_CIRCLE_RADIUS_DP),
             ),
         )
         style.addLayer(busArrowLayer("track-bus-arrows", TRACK_BUSES_SOURCE))
@@ -238,7 +238,7 @@ fun MapScreen(apiClient: TransitApiClient, mapStartStore: MapStartStore, onStopS
             SymbolLayer("track-bus-labels", TRACK_BUSES_SOURCE).withProperties(
                 textField(Expression.get("label")),
                 textFont(MAP_BOLD_FONT),
-                textSize(11f),
+                textSize(BUS_LABEL_SIZE_SP),
                 textColor(Expression.toColor(Expression.get("textColor"))),
                 textAllowOverlap(true),
             ),
