@@ -1,6 +1,7 @@
 package dev.dublinbustracker.app
 
 import android.app.Application
+import dev.dublinbustracker.app.map.MapStartStore
 import dev.dublinbustracker.data.FavouritesRepository
 import dev.dublinbustracker.data.ServerSettings
 import dev.dublinbustracker.data.ServerSettingsRepository
@@ -22,6 +23,8 @@ class AppContainer(application: Application) {
     val favouritesRepository: FavouritesRepository by lazy {
         FavouritesRepository(SharedPreferencesFavouritesStorage(application))
     }
+
+    val mapStartStore: MapStartStore by lazy { MapStartStore(application) }
 
     /** The server holds the NTA keys and does the rate-limited polling; the app just asks it. */
     val apiClient: TransitApiClient by lazy {

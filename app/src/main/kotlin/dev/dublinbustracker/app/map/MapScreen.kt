@@ -102,7 +102,7 @@ private val BROWSE_LAYERS = listOf(CLUSTER_LAYER, "stop-cluster-count", STOP_LAY
 private val TRACK_LAYERS = listOf("track-lines", TRACK_STOP_LAYER, TRACK_BUS_LAYER, "track-bus-labels")
 
 @Composable
-fun MapScreen(apiClient: TransitApiClient, onStopSelected: (Stop) -> Unit) {
+fun MapScreen(apiClient: TransitApiClient, mapStartStore: MapStartStore, onStopSelected: (Stop) -> Unit) {
     val context = LocalContext.current
     val viewModel = viewModel<MapViewModel>(
         factory = viewModelFactory { initializer { MapViewModel(apiClient, SharedPreferencesTrackingStore(context.applicationContext)) } },
@@ -130,7 +130,17 @@ fun MapScreen(apiClient: TransitApiClient, onStopSelected: (Stop) -> Unit) {
     // Layers are added once per loaded style; the data pushed into them below changes freely.
     LaunchedEffect(handle.style) {
         val style = handle.style ?: return@LaunchedEffect
-        handle.map?.cameraPosition = CameraPosition.Builder().target(DUBLIN_CITY_CENTRE).zoom(DEFAULT_ZOOM).build()
+        val start = mapStartStore.load()
+        val opensAt = if (start.mode == StartMode.CHOSEN) LatLng(start.lat, start.lon) else DUBLIN_CITY_CENTRE
+        handle.map?.cameraPosition = CameraPosition.Builder().target(opensAt).zoom(DEFAULT_ZOOM).build()
+        if (start.mode == StartMode.MY_LOCATION && hasLocationPermission(context)) {
+            // The map shows the city centre until the fix arrives; no fix leaves it there.
+            requestCurrentLocation(context) { fix ->
+                runCatching {
+                    handle.map?.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(fix.latitude, fix.longitude), MY_LOCATION_ZOOM))
+                }
+            }
+        }
 
         style.addSource(
             GeoJsonSource(

@@ -30,12 +30,19 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import dev.dublinbustracker.app.map.MapStartStore
 import dev.dublinbustracker.app.ui.SettingsSection
 import dev.dublinbustracker.data.ServerSettingsRepository
 import dev.dublinbustracker.data.TransitApiClient
 
 @Composable
-fun SettingsScreen(settingsRepository: ServerSettingsRepository, apiClient: TransitApiClient, onChooseArea: () -> Unit) {
+fun SettingsScreen(
+    settingsRepository: ServerSettingsRepository,
+    apiClient: TransitApiClient,
+    mapStartStore: MapStartStore,
+    onChooseArea: () -> Unit,
+    onChooseStart: () -> Unit,
+) {
     val viewModel = viewModel<SettingsViewModel>(
         factory = viewModelFactory { initializer { SettingsViewModel(settingsRepository, apiClient) } },
     )
@@ -125,6 +132,8 @@ fun SettingsScreen(settingsRepository: ServerSettingsRepository, apiClient: Tran
                 is ConnectionTest.Failure -> Text(test.message, color = MaterialTheme.colorScheme.error)
             }
         }
+
+        MapStartSection(mapStartStore, onChooseStart)
 
         OfflineMapsSection(onChooseArea)
     }

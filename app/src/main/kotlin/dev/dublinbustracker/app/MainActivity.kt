@@ -35,7 +35,11 @@ import dev.dublinbustracker.app.favourites.FavouritesScreen
 import dev.dublinbustracker.app.map.MapScreen
 import dev.dublinbustracker.app.route.RouteMapScreen
 import dev.dublinbustracker.app.search.SearchScreen
+import dev.dublinbustracker.app.map.MapStart
+import dev.dublinbustracker.app.map.StartMode
 import dev.dublinbustracker.app.settings.ChooseAreaScreen
+import dev.dublinbustracker.app.settings.ChooseLocationScreen
+import org.maplibre.android.geometry.LatLng
 import dev.dublinbustracker.app.settings.SettingsScreen
 import dev.dublinbustracker.core.Arrival
 import dev.dublinbustracker.core.Stop
@@ -79,14 +83,16 @@ private fun AppRoot(container: AppContainer) {
 
     var routeMapArrival by remember { mutableStateOf<Arrival?>(null) }
     var choosingMapArea by remember { mutableStateOf(false) }
+    var choosingStart by remember { mutableStateOf(false) }
 
     val stop = selectedStop
     val mapArrival = routeMapArrival
 
     // Back steps out one level at a time: map -> stop -> tab, and from another tab to Search, before the app closes.
-    BackHandler(enabled = choosingMapArea || stop != null || tab != AppTab.SEARCH) {
+    BackHandler(enabled = choosingMapArea || choosingStart || stop != null || tab != AppTab.SEARCH) {
         when {
             choosingMapArea -> choosingMapArea = false
+            choosingStart -> choosingStart = false
             mapArrival != null -> routeMapArrival = null
             stop != null -> selectedStop = null
             else -> tab = AppTab.SEARCH
@@ -94,6 +100,14 @@ private fun AppRoot(container: AppContainer) {
     }
     when {
         choosingMapArea -> ChooseAreaScreen(onBack = { choosingMapArea = false })
+        choosingStart -> ChooseLocationScreen(
+            initial = container.mapStartStore.load().takeIf { it.mode == StartMode.CHOSEN }?.let { LatLng(it.lat, it.lon) },
+            onSave = {
+                container.mapStartStore.save(MapStart(StartMode.CHOSEN, it.latitude, it.longitude))
+                choosingStart = false
+            },
+            onBack = { choosingStart = false },
+        )
         stop != null && mapArrival != null -> RouteMapScreen(
             stop = stop,
             arrival = mapArrival,
@@ -115,13 +129,19 @@ private fun AppRoot(container: AppContainer) {
                         container.favouritesRepository,
                         onStopSelected = { selectedStop = it },
                     )
-                    AppTab.MAP -> MapScreen(container.apiClient, onStopSelected = { selectedStop = it })
+                    AppTab.MAP -> MapScreen(container.apiClient, container.mapStartStore, onStopSelected = { selectedStop = it })
                     AppTab.FAVOURITES -> FavouritesScreen(
                         container.apiClient,
                         container.favouritesRepository,
                         onStopSelected = { selectedStop = it },
                     )
-                    AppTab.SETTINGS -> SettingsScreen(container.settingsRepository, container.apiClient, onChooseArea = { choosingMapArea = true })
+                    AppTab.SETTINGS -> SettingsScreen(
+                        container.settingsRepository,
+                        container.apiClient,
+                        container.mapStartStore,
+                        onChooseArea = { choosingMapArea = true },
+                        onChooseStart = { choosingStart = true },
+                    )
                 }
             }
             NavigationBar {
