@@ -53,8 +53,11 @@ import dev.dublinbustracker.data.WidgetConfig
 import dev.dublinbustracker.data.WidgetMode
 import dev.dublinbustracker.data.keepRoutes
 import dev.dublinbustracker.data.nearestFavourite
+import java.time.LocalTime
+import java.time.format.DateTimeFormatter
 
 private const val SHOWN_ARRIVALS = 4
+private val REFRESHED_FORMAT = DateTimeFormatter.ofPattern("HH:mm")
 
 /** What the widget has to say right now. */
 sealed interface WidgetView {
@@ -63,7 +66,7 @@ sealed interface WidgetView {
     data object Unreachable : WidgetView
     data object NoFavourites : WidgetView
     data object NoLocation : WidgetView
-    data class Arrivals(val title: String, val subtitle: String?, val arrivals: List<Arrival>) : WidgetView
+    data class Arrivals(val title: String, val subtitle: String?, val arrivals: List<Arrival>, val refreshedAt: String) : WidgetView
 }
 
 private val REFRESHED_AT = longPreferencesKey("refreshed_at")
@@ -109,19 +112,33 @@ private suspend fun resolve(context: Context, container: AppContainer, config: W
         WidgetMode.SINGLE_STOP -> {
             val id = config.stopId ?: return WidgetView.NotConfigured
             val stop = runCatching { container.apiClient.stop(id) }.getOrNull() ?: return WidgetView.Unreachable
-            Triple(id, stop.name, config.routes.sorted().joinToString(", ").ifEmpty { null }?.let { "Buses $it" })
+            Triple(id, stop.name, subtitleOf(stopNumber(stop.code), config.routes.sorted().joinToString(", ").ifEmpty { null }?.let { "Buses $it" }))
         }
         WidgetMode.NEAREST_FAVOURITE -> {
             if (container.favouritesRepository.favourites.value.isEmpty()) return WidgetView.NoFavourites
             val here = lastKnownFix(context) ?: return WidgetView.NoLocation
             val (favourite, meters) = nearestFavourite(container.favouritesRepository.favourites.value, config.excludedStopIds, here)
                 ?: return WidgetView.NoFavourites
-            Triple(favourite.id, favourite.nickname.ifBlank { favourite.name.ifBlank { favourite.id } }, "Nearest favourite · ${distanceText(meters)}")
+            Triple(
+                favourite.id,
+                favourite.nickname.ifBlank { favourite.name.ifBlank { favourite.id } },
+                subtitleOf(stopNumber(favourite.code), "Nearest favourite · ${distanceText(meters)}"),
+            )
         }
     }
     val arrivals = runCatching { container.apiClient.arrivals(stopId, limit = 20) }.getOrNull() ?: return WidgetView.Unreachable
-    return WidgetView.Arrivals(title, subtitle, keepRoutes(arrivals, config.routes) { it.routeShortName }.take(SHOWN_ARRIVALS))
+    return WidgetView.Arrivals(
+        title,
+        subtitle,
+        keepRoutes(arrivals, config.routes) { it.routeShortName }.take(SHOWN_ARRIVALS),
+        refreshedAt = REFRESHED_FORMAT.format(LocalTime.now()),
+    )
 }
+
+private fun stopNumber(code: String): String? = code.takeIf { it.isNotBlank() }?.let { "Stop $it" }
+
+/** The small line under the title: the parts that are there, with the stop number first. */
+private fun subtitleOf(vararg parts: String?): String? = parts.filterNotNull().joinToString(" · ").ifEmpty { null }
 
 private val TEXT = ColorProvider(day = Color(0xFF1C1B1F), night = Color(0xFFE6E1E5))
 private val MUTED = ColorProvider(day = Color(0xFF5F5B66), night = Color(0xFFB0ABB5))
@@ -164,6 +181,9 @@ private fun WidgetContent(view: WidgetView) {
                         Text(dueText(arrival), style = TextStyle(color = TEXT, fontSize = 13.sp, fontWeight = FontWeight.Medium))
                     }
                 }
+                // A spacer that takes the leftover height puts the footer at the bottom.
+                Spacer(modifier = GlanceModifier.defaultWeight())
+                Text("Refreshed at ${view.refreshedAt}", style = TextStyle(color = MUTED, fontSize = 10.sp))
             }
         }
     }
