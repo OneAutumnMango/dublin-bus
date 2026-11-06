@@ -44,6 +44,10 @@ import dev.dublinbustracker.app.map.MAP_BLUE
 import dev.dublinbustracker.app.map.BUS_LABEL_SIZE_SP
 import dev.dublinbustracker.app.map.BUS_CIRCLE_RADIUS_DP
 import dev.dublinbustracker.app.map.MapCompass
+import dev.dublinbustracker.core.busesUpToStop
+import dev.dublinbustracker.app.map.rememberMapFlag
+import dev.dublinbustracker.app.map.MapToggle
+import dev.dublinbustracker.app.map.MapMenu
 import dev.dublinbustracker.app.ui.PollWhileVisible
 import dev.dublinbustracker.app.ui.ScreenHeader
 import dev.dublinbustracker.app.map.MAP_BOLD_FONT
@@ -138,6 +142,12 @@ fun RouteMapScreen(stop: Stop, arrival: Arrival, apiClient: TransitApiClient, on
     var infoTripId by remember { mutableStateOf<String?>(null) }
 
     var showStops by remember { mutableStateOf(true) }
+    val hidePast = rememberMapFlag("hide_buses_past_stop", false)
+    // Optionally only the buses up to this stop, plus the one that has just gone past it.
+    val shownVehicles = remember(state.vehicles, state.data, hidePast.value) {
+        val stops = state.data?.stops
+        if (hidePast.value && stops != null) busesUpToStop(stops, stop.id, state.vehicles) else state.vehicles
+    }
 
     BackHandler(onBack = onBack)
 
@@ -229,11 +239,11 @@ fun RouteMapScreen(stop: Stop, arrival: Arrival, apiClient: TransitApiClient, on
         handle.style?.getLayer(STOPS_LAYER)?.setProperties(visibility(if (showStops) Property.VISIBLE else Property.NONE))
     }
 
-    LaunchedEffect(handle.style, state.vehicles) {
+    LaunchedEffect(handle.style, shownVehicles) {
         val style = handle.style ?: return@LaunchedEffect
         style.getSourceAs<GeoJsonSource>(BUSES_SOURCE)?.setGeoJson(
             collectionOf(
-                state.vehicles.map { vehicle ->
+                shownVehicles.map { vehicle ->
                     val yours = arrival.vehicleId != null && vehicle.vehicleId == arrival.vehicleId
                     featureAt(
                         vehicle.position.lat,
@@ -279,7 +289,7 @@ fun RouteMapScreen(stop: Stop, arrival: Arrival, apiClient: TransitApiClient, on
             subtitle = "Viewing ${stop.name} (${stop.code})",
             onBack = onBack,
         )
-        Legend(busCount = state.vehicles.size, showStops = showStops, onShowStops = { showStops = it })
+        Legend(busCount = shownVehicles.size, showStops = showStops, onShowStops = { showStops = it })
 
         state.error?.let {
             Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(16.dp))
@@ -291,6 +301,9 @@ fun RouteMapScreen(stop: Stop, arrival: Arrival, apiClient: TransitApiClient, on
                 CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
             }
             MapCompass(handle, modifier = Modifier.align(Alignment.TopEnd).padding(16.dp))
+            MapMenu(modifier = Modifier.align(Alignment.TopEnd).padding(top = 68.dp, end = 16.dp)) {
+                MapToggle("Hide buses past this stop", hidePast.value, hidePast::set)
+            }
             tappedLabel?.let {
                 Surface(
                     modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp),
