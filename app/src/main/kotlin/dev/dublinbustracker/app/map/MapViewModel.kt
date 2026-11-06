@@ -13,6 +13,8 @@ import dev.dublinbustracker.core.VehiclePosition
 import dev.dublinbustracker.data.TransitApiClient
 import dev.dublinbustracker.data.TransitApiException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -195,17 +197,20 @@ class MapViewModel(private val apiClient: TransitApiClient) : ViewModel() {
         if (!_showBuses.value) {
             _uiState.value = _uiState.value.copy(vehicles = emptyList())
         } else {
-            lastViewport?.let { viewport -> viewModelScope.launch { load(viewport) } }
+            refresh()
         }
     }
 
     private suspend fun refreshVehicles(viewport: Viewport) {
         runCatching { apiClient.vehiclesInBox(viewport.minLat, viewport.minLon, viewport.maxLat, viewport.maxLon) }
-            .onSuccess { vehicles -> _uiState.value = _uiState.value.copy(vehicles = vehicles) }
+            // Switched off while this was in flight: the reply must not put the buses back.
+            .onSuccess { vehicles -> if (_showBuses.value) _uiState.value = _uiState.value.copy(vehicles = vehicles) }
     }
 
     fun refresh() {
-        lastViewport?.let { viewport -> viewModelScope.launch { load(viewport) } }
+        val viewport = lastViewport ?: return
+        loadJob?.cancel()
+        loadJob = viewModelScope.launch { load(viewport) }
     }
 
     private suspend fun load(viewport: Viewport) {
@@ -228,9 +233,12 @@ class MapViewModel(private val apiClient: TransitApiClient) : ViewModel() {
             Result.success(emptyList())
         }
 
+        // runCatching also catches the cancellation of a superseded load, which must not show as an error.
+        currentCoroutineContext().ensureActive()
         _uiState.value = MapUiState(
             stops = stops.getOrDefault(_uiState.value.stops),
-            vehicles = vehicles.getOrDefault(emptyList()),
+            // Switched off while the request was in flight: don't put the buses back.
+            vehicles = if (_showBuses.value) vehicles.getOrDefault(emptyList()) else emptyList(),
             loading = false,
             message = stops.exceptionOrNull()?.message ?: vehicles.exceptionOrNull()?.message,
         )

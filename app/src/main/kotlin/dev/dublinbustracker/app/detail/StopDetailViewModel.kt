@@ -5,6 +5,9 @@ import androidx.lifecycle.viewModelScope
 import dev.dublinbustracker.core.Arrival
 import dev.dublinbustracker.core.Stop
 import dev.dublinbustracker.data.TransitApiClient
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -51,23 +54,34 @@ class StopDetailViewModel(
         refresh()
     }
 
+    private var loadJob: Job? = null
+
+    /** Only the newest request may answer: an older, slower reply must not overwrite what the user asked for since. */
     fun refresh() {
-        viewModelScope.launch { load() }
+        loadJob?.cancel()
+        loadJob = viewModelScope.launch { load() }
     }
 
     /** A pull-to-refresh, which shows its own spinner for as long as the reload takes. */
     fun pullToRefresh() {
-        viewModelScope.launch {
+        loadJob?.cancel()
+        loadJob = viewModelScope.launch {
             _pulling.value = true
-            load()
-            _pulling.value = false
+            try {
+                load()
+            } finally {
+                _pulling.value = false
+            }
         }
     }
 
     private suspend fun load() {
         // Keep showing the current list while a refresh is in flight, rather than flashing a spinner.
         if (_uiState.value !is ArrivalsUiState.Loaded) _uiState.value = ArrivalsUiState.Loading
-        _uiState.value = runCatching { apiClient.arrivals(stopId, _routeFilter.value) }.fold(
+        val result = runCatching { apiClient.arrivals(stopId, _routeFilter.value) }
+        // runCatching also catches the cancellation of a superseded request, which must not show as an error.
+        currentCoroutineContext().ensureActive()
+        _uiState.value = result.fold(
             onSuccess = { ArrivalsUiState.Loaded(it) },
             onFailure = { ArrivalsUiState.Error(it.message ?: "Failed to load arrivals") },
         )
