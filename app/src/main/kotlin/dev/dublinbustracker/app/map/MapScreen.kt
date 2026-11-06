@@ -98,12 +98,13 @@ private const val TRACK_STOP_LAYER = "track-stop-points"
 private const val TRACK_BUS_LAYER = "track-bus-circles"
 
 // Hidden while following routes, so only the followed buses and paths are on the map.
-private val BROWSE_LAYERS = listOf(CLUSTER_LAYER, "stop-cluster-count", STOP_LAYER, BUS_CIRCLE_LAYER, "bus-labels")
-private val TRACK_LAYERS = listOf("track-lines", TRACK_STOP_LAYER, TRACK_BUS_LAYER, "track-bus-labels")
+private val BROWSE_LAYERS = listOf(CLUSTER_LAYER, "stop-cluster-count", STOP_LAYER, BUS_CIRCLE_LAYER, "bus-arrows", "bus-labels")
+private val TRACK_LAYERS = listOf("track-lines", TRACK_STOP_LAYER, TRACK_BUS_LAYER, "track-bus-arrows", "track-bus-labels")
 
 @Composable
 fun MapScreen(apiClient: TransitApiClient, mapStartStore: MapStartStore, onStopSelected: (Stop) -> Unit) {
     val context = LocalContext.current
+    val density = context.resources.displayMetrics.density
     val viewModel = viewModel<MapViewModel>(
         factory = viewModelFactory { initializer { MapViewModel(apiClient, SharedPreferencesTrackingStore(context.applicationContext)) } },
     )
@@ -184,13 +185,14 @@ fun MapScreen(apiClient: TransitApiClient, mapStartStore: MapStartStore, onStopS
 
         style.addSource(GeoJsonSource(BUSES_SOURCE, collectionOf(emptyList())))
         style.addLayer(
-            CircleLayer(BUS_CIRCLE_LAYER, BUSES_SOURCE).withProperties(
+            CircleLayer(BUS_CIRCLE_LAYER, BUSES_SOURCE).withFilter(NO_BEARING).withProperties(
                 circleColor(BUS_ORANGE),
                 circleStrokeColor(android.graphics.Color.WHITE),
                 circleStrokeWidth(2f),
                 circleRadius(15f),
             ),
         )
+        style.addLayer(busArrowLayer("bus-arrows", BUSES_SOURCE))
         style.addLayer(
             SymbolLayer("bus-labels", BUSES_SOURCE).withProperties(
                 textField(Expression.get("label")),
@@ -223,13 +225,14 @@ fun MapScreen(apiClient: TransitApiClient, mapStartStore: MapStartStore, onStopS
         )
         style.addSource(GeoJsonSource(TRACK_BUSES_SOURCE, collectionOf(emptyList())))
         style.addLayer(
-            CircleLayer(TRACK_BUS_LAYER, TRACK_BUSES_SOURCE).withProperties(
+            CircleLayer(TRACK_BUS_LAYER, TRACK_BUSES_SOURCE).withFilter(NO_BEARING).withProperties(
                 circleColor(Expression.toColor(Expression.get("color"))),
                 circleStrokeColor(android.graphics.Color.WHITE),
                 circleStrokeWidth(2f),
                 circleRadius(15f),
             ),
         )
+        style.addLayer(busArrowLayer("track-bus-arrows", TRACK_BUSES_SOURCE))
         style.addLayer(
             SymbolLayer("track-bus-labels", TRACK_BUSES_SOURCE).withProperties(
                 textField(Expression.get("label")),
@@ -267,6 +270,7 @@ fun MapScreen(apiClient: TransitApiClient, mapStartStore: MapStartStore, onStopS
                     "color" to trackingColour(route.colourIndex, bus.directionId).toHexColour(),
                     "textColor" to trackingTextColour(route.colourIndex, bus.directionId).toHexColour(),
                     "tripId" to bus.tripId,
+                    *style.busProperties(trackingColour(route.colourIndex, bus.directionId), density, bus.bearing),
                 )
             }
         }
@@ -299,10 +303,11 @@ fun MapScreen(apiClient: TransitApiClient, mapStartStore: MapStartStore, onStopS
         )
     }
     LaunchedEffect(handle.style, state.vehicles) {
-        handle.style?.getSourceAs<GeoJsonSource>(BUSES_SOURCE)?.setGeoJson(
+        val style = handle.style ?: return@LaunchedEffect
+        style.getSourceAs<GeoJsonSource>(BUSES_SOURCE)?.setGeoJson(
             collectionOf(
                 state.vehicles.map {
-                    featureAt(it.position.lat, it.position.lon, "label" to it.routeShortName)
+                    featureAt(it.position.lat, it.position.lon, "label" to it.routeShortName, *style.busProperties(BUS_ORANGE, density, it.bearing))
                 },
             ),
         )
@@ -313,7 +318,7 @@ fun MapScreen(apiClient: TransitApiClient, mapStartStore: MapStartStore, onStopS
         val idleListener = MapLibreMap.OnCameraIdleListener { viewModel.onViewportChanged(map.currentViewport()) }
         val clickListener = MapLibreMap.OnMapClickListener { latLng ->
             val screenPoint = map.projection.toScreenLocation(latLng)
-            map.queryRenderedFeatures(screenPoint, TRACK_BUS_LAYER).firstOrNull()?.getStringProperty("tripId")?.let {
+            map.queryRenderedFeatures(screenPoint, TRACK_BUS_LAYER, "track-bus-arrows").firstOrNull()?.getStringProperty("tripId")?.let {
                 infoTripId = it
                 return@OnMapClickListener true
             }

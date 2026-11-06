@@ -38,14 +38,18 @@ fun <T> sortedByDistance(items: List<T>, from: LatLon, position: (T) -> LatLon?)
 
 private val COMPASS_POINTS = listOf("N", "NE", "E", "SE", "S", "SW", "W", "NW")
 
-/** Which of the eight compass points you'd head in to get from [from] to [to], e.g. "NW". */
-fun compassPoint(from: LatLon, to: LatLon): String {
+/** The compass bearing in degrees (0 = north, 90 = east) you'd head in to get from [from] to [to]. */
+fun bearingDegrees(from: LatLon, to: LatLon): Double {
     val dLon = (to.lon - from.lon) * PI / 180
     val lat1 = from.lat * PI / 180
     val lat2 = to.lat * PI / 180
     val bearing = Math.toDegrees(atan2(sin(dLon) * cos(lat2), cos(lat1) * sin(lat2) - sin(lat1) * cos(lat2) * cos(dLon)))
-    return COMPASS_POINTS[(((bearing + 360) % 360 + 22.5) / 45).toInt() % 8]
+    return (bearing + 360) % 360
 }
+
+/** Which of the eight compass points you'd head in to get from [from] to [to], e.g. "NW". */
+fun compassPoint(from: LatLon, to: LatLon): String =
+    COMPASS_POINTS[((bearingDegrees(from, to) + 22.5) / 45).toInt() % 8]
 
 /** The overall way a direction of a route heads: from its first stop to its last. Null if it has fewer than two. */
 fun directionCompass(stops: List<Stop>): String? {

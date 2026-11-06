@@ -2,6 +2,7 @@ package dev.dublinbustracker.app.map
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import dev.dublinbustracker.core.BearingTracker
 import dev.dublinbustracker.core.LatLon
 import dev.dublinbustracker.core.MAX_TRACKED_ROUTES
 import dev.dublinbustracker.core.Route
@@ -82,6 +83,9 @@ class MapViewModel(
     private val _showBuses = MutableStateFlow(false)
     val showBuses: StateFlow<Boolean> = _showBuses.asStateFlow()
 
+    private val browseBearings = BearingTracker()
+    private val trackedBearings = BearingTracker()
+
     private var loadJob: Job? = null
     private var lastViewport: Viewport? = null
 
@@ -112,7 +116,7 @@ class MapViewModel(
                 state
             } else {
                 state.copy(
-                    vehicles = if (vehicles != null) state.vehicles + (name to vehicles) else state.vehicles,
+                    vehicles = if (vehicles != null) state.vehicles + (name to trackedBearings.withBearings(vehicles)) else state.vehicles,
                     shapes = state.shapes + (name to shapes),
                     stops = state.stops + (name to stops),
                 )
@@ -184,7 +188,7 @@ class MapViewModel(
                         _tracking.update { state ->
                             state.copy(
                                 routes = state.routes + TrackedRoute(name, nextColourIndex(state.routes.map { it.colourIndex })),
-                                vehicles = state.vehicles + (name to vehicles),
+                                vehicles = state.vehicles + (name to trackedBearings.withBearings(vehicles)),
                                 shapes = state.shapes + (name to shapes),
                                 stops = state.stops + (name to stops),
                                 busy = false,
@@ -217,7 +221,7 @@ class MapViewModel(
 
     private suspend fun refreshTrackedBuses() {
         val fresh = _tracking.value.routes.mapNotNull { route ->
-            runCatching { apiClient.vehiclesForRoute(route.name) }.getOrNull()?.let { route.name to it }
+            runCatching { apiClient.vehiclesForRoute(route.name) }.getOrNull()?.let { route.name to trackedBearings.withBearings(it) }
         }.toMap()
         // A route whose refresh failed keeps its last known buses.
         _tracking.update { it.copy(vehicles = it.vehicles + fresh.filterKeys { name -> it.routes.any { route -> route.name == name } }) }
@@ -245,7 +249,7 @@ class MapViewModel(
     private suspend fun refreshVehicles(viewport: Viewport) {
         runCatching { apiClient.vehiclesInBox(viewport.minLat, viewport.minLon, viewport.maxLat, viewport.maxLon) }
             // Switched off while this was in flight: the reply must not put the buses back.
-            .onSuccess { vehicles -> if (_showBuses.value) _uiState.value = _uiState.value.copy(vehicles = vehicles) }
+            .onSuccess { vehicles -> if (_showBuses.value) _uiState.value = _uiState.value.copy(vehicles = browseBearings.withBearings(vehicles)) }
     }
 
     fun refresh() {
@@ -279,7 +283,7 @@ class MapViewModel(
         _uiState.value = MapUiState(
             stops = stops.getOrDefault(_uiState.value.stops),
             // Switched off while the request was in flight: don't put the buses back.
-            vehicles = if (_showBuses.value) vehicles.getOrDefault(emptyList()) else emptyList(),
+            vehicles = if (_showBuses.value) browseBearings.withBearings(vehicles.getOrDefault(emptyList())) else emptyList(),
             loading = false,
             message = stops.exceptionOrNull()?.message ?: vehicles.exceptionOrNull()?.message,
         )

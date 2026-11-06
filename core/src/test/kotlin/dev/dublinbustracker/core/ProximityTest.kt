@@ -89,4 +89,11 @@ class ProximityTest {
         assertEquals(null, directionCompass(emptyList()))
         assertEquals(null, directionCompass(listOf(Stop("a", "1", "A", 53.0, -6.0))))
     }
+
+    @Test
+    fun `bearing is degrees clockwise from north`() {
+        assertEquals(0.0, bearingDegrees(dublin, LatLon(dublin.lat + 0.1, dublin.lon)), 0.01)
+        assertEquals(180.0, bearingDegrees(dublin, LatLon(dublin.lat - 0.1, dublin.lon)), 0.01)
+        assertTrue(bearingDegrees(dublin, LatLon(dublin.lat, dublin.lon - 0.1)) in 269.0..271.0)
+    }
 }

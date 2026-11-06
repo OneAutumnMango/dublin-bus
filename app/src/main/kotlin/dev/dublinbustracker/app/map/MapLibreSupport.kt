@@ -2,6 +2,10 @@ package dev.dublinbustracker.app.map
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.Path
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -21,6 +25,14 @@ import org.maplibre.android.location.modes.RenderMode
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
+import org.maplibre.android.style.expressions.Expression
+import org.maplibre.android.style.layers.Property
+import org.maplibre.android.style.layers.PropertyFactory.iconAllowOverlap
+import org.maplibre.android.style.layers.PropertyFactory.iconIgnorePlacement
+import org.maplibre.android.style.layers.PropertyFactory.iconImage
+import org.maplibre.android.style.layers.PropertyFactory.iconRotate
+import org.maplibre.android.style.layers.PropertyFactory.iconRotationAlignment
+import org.maplibre.android.style.layers.SymbolLayer
 import org.maplibre.geojson.Feature
 import org.maplibre.geojson.FeatureCollection
 import org.maplibre.geojson.Point
@@ -110,3 +122,57 @@ fun MapLibreMap.showUserLocation(context: Context, style: Style) {
         locationComponent.renderMode = RenderMode.NORMAL
     }
 }
+
+private const val BUS_RADIUS_DP = 15f
+
+/** The round bus marker with a pointer on the side it is travelling towards, drawn pointing up; the layer turns it. */
+private fun busArrowBitmap(colour: Int, density: Float): Bitmap {
+    val size = (2 * (BUS_RADIUS_DP + 7) * density).toInt()
+    val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(bitmap)
+    val c = size / 2f
+    val r = BUS_RADIUS_DP * density
+    val pointer = Path().apply {
+        moveTo(c, c - r - 6 * density)
+        lineTo(c + 9 * density, c - 12 * density)
+        lineTo(c - 9 * density, c - 12 * density)
+        close()
+    }
+    // White outline first (a stroke around both shapes), then the colour on top.
+    val outline = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL_AND_STROKE
+        color = android.graphics.Color.WHITE
+        strokeWidth = 4 * density
+        strokeJoin = Paint.Join.ROUND
+    }
+    canvas.drawPath(pointer, outline)
+    canvas.drawCircle(c, c, r, outline)
+    val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = colour }
+    canvas.drawPath(pointer, fill)
+    canvas.drawCircle(c, c, r, fill)
+    return bitmap
+}
+
+/** The name of this colour's bus marker image, added to the style the first time it is asked for. */
+private fun Style.busArrowImage(colour: Int, density: Float): String {
+    val name = "bus-arrow-%06X".format(colour and 0xFFFFFF)
+    if (getImage(name) == null) addImage(name, busArrowBitmap(colour, density))
+    return name
+}
+
+/** The feature properties that draw a bus in [colour]: its marker image and, when known, the way it is heading. */
+fun Style.busProperties(colour: Int, density: Float, bearing: Float?): Array<Pair<String, Any>> =
+    listOfNotNull<Pair<String, Any>>("icon" to busArrowImage(colour, density), bearing?.let { "bearing" to it }).toTypedArray()
+
+/** Buses that have a heading, drawn as the arrow marker turned to face it; the round layer beneath shows the rest. */
+fun busArrowLayer(id: String, source: String): SymbolLayer =
+    SymbolLayer(id, source).withFilter(Expression.has("bearing")).withProperties(
+        iconImage(Expression.get("icon")),
+        iconRotate(Expression.get("bearing")),
+        iconRotationAlignment(Property.ICON_ROTATION_ALIGNMENT_MAP),
+        iconAllowOverlap(true),
+        iconIgnorePlacement(true),
+    )
+
+/** For the round layer: only the buses with no known heading. */
+val NO_BEARING: Expression = Expression.not(Expression.has("bearing"))

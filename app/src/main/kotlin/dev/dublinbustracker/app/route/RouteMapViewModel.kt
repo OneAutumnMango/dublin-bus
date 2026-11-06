@@ -2,6 +2,7 @@ package dev.dublinbustracker.app.route
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import dev.dublinbustracker.core.BearingTracker
 import dev.dublinbustracker.core.LatLon
 import dev.dublinbustracker.core.Stop
 import dev.dublinbustracker.core.TripInfo
@@ -30,6 +31,7 @@ class RouteMapViewModel(
     private val tripId: String,
     private val apiClient: TransitApiClient,
 ) : ViewModel() {
+    private val bearings = BearingTracker()
     private val _uiState = MutableStateFlow(RouteMapUiState())
     val uiState: StateFlow<RouteMapUiState> = _uiState.asStateFlow()
 
@@ -49,7 +51,7 @@ class RouteMapViewModel(
                     RouteMapData(trip, shape.await(), stops.await()) to vehicles.await()
                 }
             }.onSuccess { (data, vehicles) ->
-                _uiState.value = RouteMapUiState(data = data, vehicles = vehicles)
+                _uiState.value = RouteMapUiState(data = data, vehicles = bearings.withBearings(vehicles))
             }.onFailure {
                 _uiState.value = RouteMapUiState(error = it.message ?: "Failed to load the route")
             }
@@ -62,7 +64,7 @@ class RouteMapViewModel(
         viewModelScope.launch {
             // A failed refresh just keeps the last positions on screen rather than blanking the map.
             runCatching { apiClient.vehiclesForRoute(trip.routeId, trip.directionId) }
-                .onSuccess { vehicles -> _uiState.value = _uiState.value.copy(vehicles = vehicles) }
+                .onSuccess { vehicles -> _uiState.value = _uiState.value.copy(vehicles = bearings.withBearings(vehicles)) }
         }
     }
 }

@@ -47,6 +47,9 @@ import dev.dublinbustracker.app.ui.ScreenHeader
 import dev.dublinbustracker.app.map.MAP_BOLD_FONT
 import dev.dublinbustracker.app.map.collectionOf
 import dev.dublinbustracker.app.map.featureAt
+import dev.dublinbustracker.app.map.NO_BEARING
+import dev.dublinbustracker.app.map.busArrowLayer
+import dev.dublinbustracker.app.map.busProperties
 import dev.dublinbustracker.app.map.rememberMapHandle
 import dev.dublinbustracker.app.map.showUserLocation
 import dev.dublinbustracker.core.Arrival
@@ -102,6 +105,7 @@ private const val BUSES_SOURCE = "route-buses"
 private const val STOPS_LAYER = "route-stops-layer"
 private const val SELECTED_LAYER = "route-selected-layer"
 private const val BUSES_LAYER = "route-buses-layer"
+private const val BUS_ARROWS_LAYER = "route-bus-arrows"
 
 /** [farOut] when the whole route is in view, [closeIn] by street level: keeps dense stops from swamping the path. */
 private fun zoomScaled(farOut: Float, closeIn: Float): Expression =
@@ -126,6 +130,7 @@ fun RouteMapScreen(stop: Stop, arrival: Arrival, apiClient: TransitApiClient, on
     PollWhileVisible(VEHICLE_REFRESH_INTERVAL_MS, viewModel::refreshVehicles)
     val handle = rememberMapHandle()
     val context = LocalContext.current
+    val density = context.resources.displayMetrics.density
     var tappedLabel by remember { mutableStateOf<String?>(null) }
     var infoTripId by remember { mutableStateOf<String?>(null) }
 
@@ -167,7 +172,7 @@ fun RouteMapScreen(stop: Stop, arrival: Arrival, apiClient: TransitApiClient, on
             ),
         )
         style.addLayer(
-            CircleLayer(BUSES_LAYER, BUSES_SOURCE).withProperties(
+            CircleLayer(BUSES_LAYER, BUSES_SOURCE).withFilter(NO_BEARING).withProperties(
                 circleColor(
                     Expression.switchCase(
                         Expression.eq(Expression.get("yours"), Expression.literal(true)),
@@ -178,6 +183,7 @@ fun RouteMapScreen(stop: Stop, arrival: Arrival, apiClient: TransitApiClient, on
                 circleStrokeColor(android.graphics.Color.WHITE), circleStrokeWidth(2f), circleRadius(15f),
             ),
         )
+        style.addLayer(busArrowLayer(BUS_ARROWS_LAYER, BUSES_SOURCE))
         style.addLayer(
             SymbolLayer("route-bus-labels", BUSES_SOURCE).withProperties(
                 textField(Expression.get("label")), textFont(MAP_BOLD_FONT), textSize(11f),
@@ -221,7 +227,8 @@ fun RouteMapScreen(stop: Stop, arrival: Arrival, apiClient: TransitApiClient, on
     }
 
     LaunchedEffect(handle.style, state.vehicles) {
-        handle.style?.getSourceAs<GeoJsonSource>(BUSES_SOURCE)?.setGeoJson(
+        val style = handle.style ?: return@LaunchedEffect
+        style.getSourceAs<GeoJsonSource>(BUSES_SOURCE)?.setGeoJson(
             collectionOf(
                 state.vehicles.map { vehicle ->
                     val yours = arrival.vehicleId != null && vehicle.vehicleId == arrival.vehicleId
@@ -233,6 +240,7 @@ fun RouteMapScreen(stop: Stop, arrival: Arrival, apiClient: TransitApiClient, on
                         "textColor" to readableTextOn(if (yours) YOUR_BUS_COLOR else OTHER_BUS_COLOR).toHexColour(),
                         "tripId" to vehicle.tripId,
                         "title" to "${vehicle.routeShortName} to ${vehicle.headsign}" + if (yours) " (your bus)" else "",
+                        *style.busProperties(if (yours) YOUR_BUS_COLOR else OTHER_BUS_COLOR, density, vehicle.bearing),
                     )
                 },
             ),
@@ -244,7 +252,7 @@ fun RouteMapScreen(stop: Stop, arrival: Arrival, apiClient: TransitApiClient, on
         val clickListener = MapLibreMap.OnMapClickListener { latLng ->
             val screenPoint = map.projection.toScreenLocation(latLng)
             // Topmost first, so tapping the viewed stop under a bus names the stop's own marker order.
-            val hit = map.queryRenderedFeatures(screenPoint, SELECTED_LAYER, BUSES_LAYER, STOPS_LAYER).firstOrNull()
+            val hit = map.queryRenderedFeatures(screenPoint, SELECTED_LAYER, BUSES_LAYER, BUS_ARROWS_LAYER, STOPS_LAYER).firstOrNull()
             val busTripId = hit?.getStringProperty("tripId")?.takeIf { it.isNotEmpty() }
             if (busTripId != null) {
                 infoTripId = busTripId
