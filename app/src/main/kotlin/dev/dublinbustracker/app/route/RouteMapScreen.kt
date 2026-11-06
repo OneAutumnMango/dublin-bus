@@ -48,6 +48,7 @@ import dev.dublinbustracker.app.map.MAP_BOLD_FONT
 import dev.dublinbustracker.app.map.collectionOf
 import dev.dublinbustracker.app.map.featureAt
 import dev.dublinbustracker.app.map.rememberMapHandle
+import dev.dublinbustracker.app.map.showUserLocation
 import dev.dublinbustracker.core.Arrival
 import dev.dublinbustracker.core.OkabeIto
 import dev.dublinbustracker.core.readableTextOn
@@ -124,6 +125,7 @@ fun RouteMapScreen(stop: Stop, arrival: Arrival, apiClient: TransitApiClient, on
     val state by viewModel.uiState.collectAsState()
     PollWhileVisible(VEHICLE_REFRESH_INTERVAL_MS, viewModel::refreshVehicles)
     val handle = rememberMapHandle()
+    val context = LocalContext.current
     var tappedLabel by remember { mutableStateOf<String?>(null) }
     var infoTripId by remember { mutableStateOf<String?>(null) }
 
@@ -187,6 +189,7 @@ fun RouteMapScreen(stop: Stop, arrival: Arrival, apiClient: TransitApiClient, on
                 circleColor(THIS_STOP_COLOR), circleStrokeColor(android.graphics.Color.WHITE), circleStrokeWidth(zoomScaled(1.5f, 3f)), circleRadius(zoomScaled(3.5f, 8f)),
             ),
         )
+        handle.map?.showUserLocation(context, style)
     }
 
     LaunchedEffect(handle.style, state.data) {

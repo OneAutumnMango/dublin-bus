@@ -1,5 +1,7 @@
 package dev.dublinbustracker.app.map
 
+import android.annotation.SuppressLint
+import android.content.Context
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -11,7 +13,11 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import dev.dublinbustracker.core.OkabeIto
+import dev.dublinbustracker.app.location.hasLocationPermission
 import org.maplibre.android.MapLibre
+import org.maplibre.android.location.LocationComponentActivationOptions
+import org.maplibre.android.location.modes.CameraMode
+import org.maplibre.android.location.modes.RenderMode
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
@@ -92,3 +98,15 @@ fun featureAt(lat: Double, lon: Double, vararg properties: Pair<String, Any>): F
     }
 
 fun collectionOf(features: List<Feature>): FeatureCollection = FeatureCollection.fromFeatures(features)
+
+/** Draws the device's own position as a blue dot with an accuracy ring; does nothing until a location permission is held. */
+@SuppressLint("MissingPermission")
+fun MapLibreMap.showUserLocation(context: Context, style: Style) {
+    if (!hasLocationPermission(context)) return
+    runCatching {
+        locationComponent.activateLocationComponent(LocationComponentActivationOptions.builder(context, style).build())
+        locationComponent.isLocationComponentEnabled = true
+        locationComponent.cameraMode = CameraMode.NONE // show the dot without taking over the camera
+        locationComponent.renderMode = RenderMode.NORMAL
+    }
+}

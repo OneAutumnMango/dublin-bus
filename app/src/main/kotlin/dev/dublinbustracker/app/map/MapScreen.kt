@@ -122,6 +122,7 @@ fun MapScreen(apiClient: TransitApiClient, onStopSelected: (Stop) -> Unit) {
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),
     ) { results ->
+        if (results.values.any { it }) handle.style?.let { style -> handle.map?.showUserLocation(context, style) }
         if (results.values.any { it } && pendingLocationRequest) handle.map?.let { seekToCurrentLocation(context, it) }
         pendingLocationRequest = false
     }
@@ -228,6 +229,8 @@ fun MapScreen(apiClient: TransitApiClient, onStopSelected: (Stop) -> Unit) {
                 textAllowOverlap(true),
             ),
         )
+        // Added last so the dot sits above the stops and buses rather than under them.
+        handle.map?.showUserLocation(context, style)
     }
 
     // Following routes swaps the whole map over to just those routes' paths and buses.
