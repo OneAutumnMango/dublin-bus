@@ -17,6 +17,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.foundation.layout.Row
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -31,12 +33,14 @@ import dev.dublinbustracker.app.favourites.FavouriteStarButton
 import dev.dublinbustracker.app.ui.AppListItem
 import dev.dublinbustracker.core.Stop
 import dev.dublinbustracker.data.FavouritesRepository
+import dev.dublinbustracker.data.RecentStopsRepository
 import dev.dublinbustracker.data.TransitApiClient
 
 @Composable
 fun SearchScreen(
     apiClient: TransitApiClient,
     favouritesRepository: FavouritesRepository,
+    recentStops: RecentStopsRepository,
     onStopSelected: (Stop) -> Unit,
 ) {
     val viewModel = viewModel<SearchViewModel>(
@@ -45,6 +49,12 @@ fun SearchScreen(
     val query by viewModel.query.collectAsState()
     val state by viewModel.uiState.collectAsState()
     val favouriteIds by favouritesRepository.favouriteIds.collectAsState()
+    val recent by recentStops.recent.collectAsState()
+    // Only a stop opened from these results counts as searched for.
+    val open = { stop: Stop ->
+        recentStops.add(stop)
+        onStopSelected(stop)
+    }
 
     Column(modifier = Modifier.fillMaxSize()) {
         OutlinedTextField(
@@ -57,7 +67,26 @@ fun SearchScreen(
         )
 
         when (val current = state) {
-            is SearchUiState.Idle -> Column(
+            is SearchUiState.Idle -> if (recent.isNotEmpty()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("Recent", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                    TextButton(onClick = recentStops::clear) { Text("Clear") }
+                }
+                LazyColumn(contentPadding = PaddingValues(bottom = 16.dp)) {
+                    items(recent, key = { it.id }) { favourite ->
+                        val stop = favourite.toStop()
+                        StopRow(
+                            stop = stop,
+                            isFavourite = stop.id in favouriteIds,
+                            onToggleFavourite = { favouritesRepository.toggle(stop) },
+                            onClick = { open(stop) },
+                        )
+                    }
+                }
+            } else Column(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp, vertical = 48.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
@@ -84,7 +113,7 @@ fun SearchScreen(
                             stop = stop,
                             isFavourite = stop.id in favouriteIds,
                             onToggleFavourite = { favouritesRepository.toggle(stop) },
-                            onClick = { onStopSelected(stop) },
+                            onClick = { open(stop) },
                         )
                     }
                 }

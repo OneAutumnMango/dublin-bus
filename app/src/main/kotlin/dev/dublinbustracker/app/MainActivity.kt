@@ -127,6 +127,7 @@ private fun AppRoot(container: AppContainer) {
                     AppTab.SEARCH -> SearchScreen(
                         container.apiClient,
                         container.favouritesRepository,
+                        container.recentStops,
                         onStopSelected = { selectedStop = it },
                     )
                     AppTab.MAP -> MapScreen(container.apiClient, container.mapStartStore, onStopSelected = { selectedStop = it })

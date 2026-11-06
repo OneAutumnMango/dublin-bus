@@ -3,6 +3,7 @@ package dev.dublinbustracker.app
 import android.app.Application
 import dev.dublinbustracker.app.map.MapStartStore
 import dev.dublinbustracker.data.FavouritesRepository
+import dev.dublinbustracker.data.RecentStopsRepository
 import dev.dublinbustracker.data.ServerSettings
 import dev.dublinbustracker.data.ServerSettingsRepository
 import dev.dublinbustracker.data.TransitApiClient
@@ -22,6 +23,10 @@ class AppContainer(application: Application) {
 
     val favouritesRepository: FavouritesRepository by lazy {
         FavouritesRepository(SharedPreferencesFavouritesStorage(application))
+    }
+
+    val recentStops: RecentStopsRepository by lazy {
+        RecentStopsRepository(SharedPreferencesRawStorage(application, "recent_stops"))
     }
 
     val mapStartStore: MapStartStore by lazy { MapStartStore(application) }

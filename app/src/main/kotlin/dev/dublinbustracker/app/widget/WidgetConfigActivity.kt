@@ -34,7 +34,7 @@ class WidgetConfigActivity : ComponentActivity() {
         setContent {
             MaterialTheme {
                 Surface(modifier = Modifier.fillMaxSize().safeDrawingPadding()) {
-                    SearchScreen(container.apiClient, container.favouritesRepository, onStopSelected = ::onStopChosen)
+                    SearchScreen(container.apiClient, container.favouritesRepository, container.recentStops, onStopSelected = ::onStopChosen)
                 }
             }
         }

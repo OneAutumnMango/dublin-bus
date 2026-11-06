@@ -39,3 +39,14 @@ class SharedPreferencesServerSettingsStorage(context: Context) : ServerSettingsS
         const val KEY_SETTINGS = "settings_json"
     }
 }
+
+/** One JSON string in its own preferences file, for lists the app keeps that aren't favourites. */
+class SharedPreferencesRawStorage(context: Context, file: String) : FavouritesStorage {
+    private val prefs = context.getSharedPreferences(file, Context.MODE_PRIVATE)
+
+    override fun loadRaw(): String? = prefs.getString("json", null)
+
+    override fun saveRaw(json: String) {
+        prefs.edit().putString("json", json).apply()
+    }
+}
