@@ -1,9 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
-    <!-- Local dev only: the Android emulator's loopback alias and localhost. Production traffic
-         goes through the Cloudflare Tunnel's https URL, which is covered by the base config. -->
-    <domain-config cleartextTrafficPermitted="true">
-        <domain includeSubdomains="false">10.0.2.2</domain>
-        <domain includeSubdomains="false">localhost</domain>
-    </domain-config>
+    <!-- Plain http is allowed so the app can reach a server on the LAN. Put https in front of it
+         before sending auth headers over a network you don't trust. -->
+    <base-config cleartextTrafficPermitted="true" />
 </network-security-config>

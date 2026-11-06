@@ -18,7 +18,8 @@ extensions.configure<ApplicationExtension> {
     defaultConfig {
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
+        // The release workflow passes the run number so each release can install over the last.
+        versionCode = providers.gradleProperty("versionCode").map(String::toInt).getOrElse(1)
         // The release workflow passes the tag; anything else is honestly not a version.
         versionName = providers.gradleProperty("versionName").getOrElse("0.0.0-dev")
     }

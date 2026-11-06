@@ -25,7 +25,7 @@ jobs:
 
       # -PsplitAbi makes one APK per CPU (arm64-v8a, armeabi-v7a, x86_64, x86).
       - name: Build
-        run: ./gradlew --console=plain :app:assembleRelease -PsplitAbi -PversionName=${{ github.ref_name }}
+        run: ./gradlew --console=plain :app:assembleRelease -PsplitAbi -PversionName=${{ github.ref_name }} -PversionCode=${{ github.run_number }}
 
       # AGP leaves release APKs unsigned; sign them with the keystore kept in repo secrets.
       - name: Sign
