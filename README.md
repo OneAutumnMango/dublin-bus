@@ -16,6 +16,8 @@ schedule, so this app never touches NTA directly and is never rate limited itsel
 ## Setup
 ```
 ./scripts/setup-dev-env.sh      # JDK/Gradle/Android SDK check, writes local.properties
+./scripts/run-emulator.sh       # boot the dev emulator and wait until it's usable (--stop shuts it down)
+./scripts/install-app.sh        # build the debug app, install it on the emulator and launch it
 ./scripts/build.sh --install    # build debug APK and install on a connected device/emulator
 ./scripts/test.sh               # run all unit tests
 ```

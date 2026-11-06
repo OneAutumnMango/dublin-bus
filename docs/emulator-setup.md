@@ -66,6 +66,20 @@ command line, or just kill by PID once you've looked.
 
 ## Day-to-day commands
 
+The two scripts below do everything in the next block, with the memory precautions built in (it
+won't boot the emulator when free RAM is dangerously low, and stops the Gradle daemon after a
+build):
+
+```bash
+./scripts/run-emulator.sh               # boot and wait until Android has finished starting
+./scripts/run-emulator.sh --gps         # ...and put its GPS in Dublin city centre
+./scripts/run-emulator.sh --stop        # shut it down (checks the process is really gone)
+./scripts/install-app.sh                # build, install on the emulator, launch
+./scripts/install-app.sh --start-emulator   # ...booting the emulator first if it isn't running
+```
+
+The same thing by hand:
+
 ```bash
 # one-time per shell, or add to your rc:
 source scripts/env.sh                           # puts adb/sdkmanager/emulator on PATH
