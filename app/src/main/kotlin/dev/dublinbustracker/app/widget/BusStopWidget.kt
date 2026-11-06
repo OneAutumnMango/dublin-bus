@@ -32,6 +32,7 @@ import androidx.glance.layout.Row
 import androidx.glance.layout.Spacer
 import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.fillMaxWidth
+import androidx.glance.layout.height
 import androidx.glance.layout.padding
 import androidx.glance.layout.width
 import androidx.glance.text.FontWeight
@@ -145,7 +146,8 @@ private fun WidgetContent(view: WidgetView) {
                         modifier = GlanceModifier.clickable(actionRunCallback<RefreshWidgetAction>()),
                     )
                 }
-                Spacer(modifier = GlanceModifier.padding(top = 4.dp))
+                // A Spacer with no height of its own stretches to fill the widget and pushes everything below it out of view.
+                Spacer(modifier = GlanceModifier.height(4.dp))
                 if (view.arrivals.isEmpty()) {
                     Text("No upcoming buses", style = TextStyle(color = MUTED, fontSize = 13.sp))
                 }
