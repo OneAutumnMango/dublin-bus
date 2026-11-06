@@ -1,0 +1,145 @@
+package dev.dublinbustracker.app
+
+import dev.dublinbustracker.app.detail.ArrivalsUiState
+import dev.dublinbustracker.app.detail.StopDetailViewModel
+import dev.dublinbustracker.app.map.MapViewModel
+import dev.dublinbustracker.app.map.Viewport
+import dev.dublinbustracker.app.route.RouteMapViewModel
+import dev.dublinbustracker.core.Stop
+import dev.dublinbustracker.data.ServerSettings
+import dev.dublinbustracker.data.TransitApiClient
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.TestCoroutineScheduler
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.setMain
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Protocol
+import okhttp3.Request
+import okhttp3.Response
+import okhttp3.ResponseBody.Companion.toResponseBody
+import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
+
+/**
+ * The view models talk to the server only through [TransitApiClient], so these run it against a
+ * canned HTTP layer. Virtual time drives the view models' own delays; the requests themselves
+ * run on real IO threads, hence the short real waits.
+ */
+@OptIn(ExperimentalCoroutinesApi::class)
+class ViewModelTest {
+    private val scheduler = TestCoroutineScheduler()
+    private val requests = AtomicInteger()
+
+    @BeforeEach
+    fun setUp() {
+        Dispatchers.setMain(UnconfinedTestDispatcher(scheduler))
+    }
+
+    @AfterEach
+    fun tearDown() {
+        Dispatchers.resetMain()
+    }
+
+    private fun client(respond: (Request) -> String): TransitApiClient {
+        val http = OkHttpClient.Builder()
+            .addInterceptor { chain ->
+                requests.incrementAndGet()
+                Response.Builder()
+                    .request(chain.request())
+                    .protocol(Protocol.HTTP_1_1)
+                    .code(200)
+                    .message("OK")
+                    .body(respond(chain.request()).toResponseBody("application/json".toMediaType()))
+                    .build()
+            }
+            .build()
+        return TransitApiClient({ ServerSettings("http://test/") }, http)
+    }
+
+    private fun waitFor(timeoutMs: Long = 5_000, condition: () -> Boolean) {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (!condition() && System.currentTimeMillis() < deadline) Thread.sleep(10)
+        assertTrue(condition(), "timed out waiting")
+    }
+
+    private fun arrivalsJson(destination: String) =
+        """[{"routeShortName":"15","destination":"$destination","dueMinutes":3,"isRealtime":true}]"""
+
+    private val stop = Stop("s1", "1", "Stop", 0.0, 0.0, routes = listOf("15"))
+
+    @Test
+    fun `an older slow reply does not overwrite a newer filter's arrivals`() {
+        val release = CountDownLatch(1)
+        val vm = StopDetailViewModel(
+            stop,
+            client { request ->
+                if (request.url.queryParameter("route") == null) {
+                    release.await(5, TimeUnit.SECONDS) // the unfiltered request is the slow one
+                    arrivalsJson("Unfiltered")
+                } else {
+                    arrivalsJson("Filtered")
+                }
+            },
+        )
+
+        vm.setRouteFilter("15")
+        waitFor { (vm.uiState.value as? ArrivalsUiState.Loaded)?.arrivals?.firstOrNull()?.destination == "Filtered" }
+        release.countDown()
+        Thread.sleep(300) // time for the stale reply to arrive, if it were going to be used
+
+        val shown = (vm.uiState.value as ArrivalsUiState.Loaded).arrivals.single().destination
+        assertEquals("Filtered", shown)
+    }
+
+    @Test
+    fun `the route map view model makes no requests of its own after loading`() {
+        val vm = RouteMapViewModel(
+            "t1",
+            client { request ->
+                val path = request.url.encodedPath
+                when {
+                    path.endsWith("/shape") -> """{"encodedPolyline":""}"""
+                    path.endsWith("/stops") -> """{"directions":{"0":[]}}"""
+                    path.endsWith("/vehicles") -> "[]"
+                    else -> """{"tripId":"t1","routeId":"r1","routeShortName":"15","directionId":"0"}"""
+                }
+            },
+        )
+        waitFor { vm.uiState.value.data != null }
+        val afterLoad = requests.get()
+
+        scheduler.advanceTimeBy(10 * 60_000L) // ten minutes: the old loop would have polled twenty times
+        Thread.sleep(300)
+
+        assertEquals(afterLoad, requests.get())
+        vm.refreshVehicles() // refreshing is the screen's job, one call per tick
+        waitFor { requests.get() == afterLoad + 1 }
+    }
+
+    @Test
+    fun `the map view model polls only when the screen asks it to`() {
+        val vm = MapViewModel(client { "[]" })
+        vm.onViewportChanged(Viewport(53.34, -6.26, 1_000, 53.33, -6.27, 53.35, -6.25))
+        scheduler.advanceTimeBy(1_000)
+        vm.toggleBuses()
+        waitFor { requests.get() >= 2 } // the stops and the buses
+        Thread.sleep(300)
+        val settled = requests.get()
+
+        scheduler.advanceTimeBy(10 * 60_000L)
+        Thread.sleep(300)
+        assertEquals(settled, requests.get())
+
+        vm.poll()
+        waitFor { requests.get() == settled + 1 }
+    }
+}
