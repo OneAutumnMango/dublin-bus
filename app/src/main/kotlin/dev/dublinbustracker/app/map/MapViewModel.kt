@@ -8,6 +8,8 @@ import dev.dublinbustracker.core.MAX_TRACKED_ROUTES
 import dev.dublinbustracker.core.Route
 import dev.dublinbustracker.core.Stop
 import dev.dublinbustracker.core.destinationsOf
+import dev.dublinbustracker.core.distanceMeters
+import dev.dublinbustracker.core.stopTimesLabel
 import dev.dublinbustracker.core.nextColourIndex
 import dev.dublinbustracker.core.rankRouteSuggestions
 import dev.dublinbustracker.core.VehiclePosition
@@ -27,6 +29,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.time.ZoneId
 
 data class MapUiState(
     val stops: List<Stop> = emptyList(),
@@ -43,6 +46,8 @@ data class Viewport(
     val minLon: Double,
     val maxLat: Double,
     val maxLon: Double,
+    /** Camera zoom, 0 when unknown. */
+    val zoom: Double = 0.0,
 )
 
 /** A route the user is following, with the colour slot its buses and path are drawn in. */
@@ -58,6 +63,10 @@ data class TrackingUiState(
     /** Each route's stops in order, by route name then direction id. */
     val stops: Map<String, Map<String, List<Stop>>> = emptyMap(),
     val showStops: Boolean = true,
+    /** Label the stops in view with their next arrivals once zoomed in far enough. */
+    val showStopTimes: Boolean = false,
+    /** Those labels, by stop id. */
+    val stopTimes: Map<String, String> = emptyMap(),
     /** (route, direction) pairs switched off in the Directions dropdown. */
     val hidden: Set<Pair<String, String>> = emptySet(),
     val message: String? = null,
@@ -72,6 +81,11 @@ const val BUS_REFRESH_MS = 15_000L
 private const val SUGGEST_DEBOUNCE_MS = 250L
 private const val PAN_DEBOUNCE_MS = 400L
 private const val MAX_RADIUS_METERS = 5_000
+
+/** Below this zoom stops are too close together to label. */
+private const val STOP_TIMES_MIN_ZOOM = 15.0
+private const val STOP_TIMES_MAX_STOPS = 10
+private const val STOP_TIMES_MAX_AGE_MS = 60_000L
 
 class MapViewModel(
     private val apiClient: TransitApiClient,
@@ -91,7 +105,13 @@ class MapViewModel(
 
     private val saved = store.load()
     private val _tracking = MutableStateFlow(
-        TrackingUiState(enabled = saved.enabled, routes = saved.routes, hidden = saved.hidden, showStops = saved.showStops),
+        TrackingUiState(
+            enabled = saved.enabled,
+            routes = saved.routes,
+            hidden = saved.hidden,
+            showStops = saved.showStops,
+            showStopTimes = saved.showStopTimes,
+        ),
     )
     val tracking: StateFlow<TrackingUiState> = _tracking.asStateFlow()
 
@@ -102,7 +122,7 @@ class MapViewModel(
 
     init {
         viewModelScope.launch {
-            _tracking.map { SavedTracking(it.enabled, it.routes, it.hidden, it.showStops) }.distinctUntilChanged().collect(store::save)
+            _tracking.map { SavedTracking(it.enabled, it.routes, it.hidden, it.showStops, it.showStopTimes) }.distinctUntilChanged().collect(store::save)
         }
         saved.routes.forEach { route -> viewModelScope.launch { restore(route.name) } }
     }
@@ -150,6 +170,65 @@ class MapViewModel(
         }
     }
 
+    private var timesJob: Job? = null
+    private val timesFetchedAt = HashMap<String, Long>()
+
+    fun setShowStopTimes(on: Boolean) {
+        _tracking.update { it.copy(showStopTimes = on, stopTimes = if (on) it.stopTimes else emptyMap()) }
+        if (on) lastViewport?.let { refreshStopTimes(it, force = true) }
+    }
+
+    /**
+     * Keeps the next-arrivals labels for the stops in [viewport] up to date: only when following routes, with the
+     * option on and zoomed in; only the stops nearest the middle; and a stop only asked again once its times are a minute old.
+     */
+    private fun refreshStopTimes(viewport: Viewport, force: Boolean = false) {
+        val state = _tracking.value
+        if (!state.enabled || !state.showStopTimes || state.routes.isEmpty() || viewport.zoom < STOP_TIMES_MIN_ZOOM) {
+            timesJob?.cancel()
+            if (state.stopTimes.isNotEmpty()) _tracking.update { it.copy(stopTimes = emptyMap()) }
+            return
+        }
+        val centre = LatLon(viewport.centerLat, viewport.centerLon)
+        // Each stop in view with the followed routes that call at it.
+        val visible = state.routes.flatMap { route ->
+            state.stops[route.name].orEmpty()
+                .filterKeys { (route.name to it) !in state.hidden }
+                .values.flatten()
+                .filter { it.lat in viewport.minLat..viewport.maxLat && it.lon in viewport.minLon..viewport.maxLon }
+                .map { it to route.name }
+        }
+            .groupBy({ it.first.id }, { it })
+            .values
+            .map { entries -> entries.first().first to entries.map { it.second }.distinct() }
+            .sortedBy { (stop, _) -> distanceMeters(centre, LatLon(stop.lat, stop.lon)) }
+            .take(STOP_TIMES_MAX_STOPS)
+        val now = System.currentTimeMillis()
+        val due = visible.filter { (stop, _) -> force || now - (timesFetchedAt[stop.id] ?: 0L) > STOP_TIMES_MAX_AGE_MS }
+        val visibleIds = visible.map { it.first.id }.toSet()
+        // Labels for stops that have scrolled out of view go; the rest stay while new ones load.
+        _tracking.update { it.copy(stopTimes = it.stopTimes.filterKeys { id -> id in visibleIds }) }
+        if (due.isEmpty()) return
+
+        timesJob?.cancel()
+        timesJob = viewModelScope.launch {
+            val fetched = coroutineScope {
+                due.map { (stop, routes) ->
+                    async {
+                        val perRoute = routes.map { route -> route to (runCatching { apiClient.arrivals(stop.id, route, limit = 2) }.getOrNull() ?: emptyList()) }
+                        stop.id to stopTimesLabel(perRoute, System.currentTimeMillis() / 1000, ZoneId.systemDefault())
+                    }
+                }.awaitAll()
+            }
+            // runCatching also catches the cancellation of a superseded request, which must not be taken for an empty answer.
+            currentCoroutineContext().ensureActive()
+            fetched.forEach { (id, _) -> timesFetchedAt[id] = now }
+            _tracking.update { s ->
+                s.copy(stopTimes = s.stopTimes + fetched.mapNotNull { (id, label) -> label?.let { id to it } } - fetched.filter { it.second == null }.map { it.first }.toSet())
+            }
+        }
+    }
+
     fun setShowStops(on: Boolean) {
         _tracking.update { it.copy(showStops = on) }
     }
@@ -163,6 +242,7 @@ class MapViewModel(
     fun setTracking(on: Boolean) {
         _tracking.update { it.copy(enabled = on, message = null) }
         if (on && _tracking.value.routes.isNotEmpty()) viewModelScope.launch { refreshTrackedBuses() }
+        lastViewport?.let { refreshStopTimes(it, force = on) } // labels appear with follow mode, and go with it
     }
 
     /** One refresh of whatever is live on the map; the screen calls it on a timer while it is showing. */
@@ -170,6 +250,7 @@ class MapViewModel(
         viewModelScope.launch {
             if (_tracking.value.enabled && _tracking.value.routes.isNotEmpty()) refreshTrackedBuses()
             if (_showBuses.value) lastViewport?.let { refreshVehicles(it) }
+            lastViewport?.let { refreshStopTimes(it) }
         }
     }
 
@@ -233,6 +314,7 @@ class MapViewModel(
         loadJob = viewModelScope.launch {
             // Panning fires continuously; wait for it to settle before querying.
             delay(PAN_DEBOUNCE_MS)
+            refreshStopTimes(viewport)
             load(viewport)
         }
     }

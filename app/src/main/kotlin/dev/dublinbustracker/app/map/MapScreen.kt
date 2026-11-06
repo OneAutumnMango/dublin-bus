@@ -70,6 +70,11 @@ import org.maplibre.android.style.layers.PropertyFactory.circleColor
 import org.maplibre.android.style.layers.PropertyFactory.circleRadius
 import org.maplibre.android.style.layers.PropertyFactory.circleStrokeColor
 import org.maplibre.android.style.layers.PropertyFactory.circleStrokeWidth
+import org.maplibre.android.style.layers.PropertyFactory.textHaloColor
+import org.maplibre.android.style.layers.PropertyFactory.textHaloWidth
+import org.maplibre.android.style.layers.PropertyFactory.textAnchor
+import org.maplibre.android.style.layers.PropertyFactory.textOffset
+import org.maplibre.android.style.layers.PropertyFactory.textJustify
 import org.maplibre.android.style.layers.PropertyFactory.textAllowOverlap
 import org.maplibre.android.style.layers.PropertyFactory.textColor
 import org.maplibre.android.style.layers.PropertyFactory.textField
@@ -97,10 +102,12 @@ private const val TRACK_BUSES_SOURCE = "track-buses"
 private const val TRACK_STOPS_SOURCE = "track-stops"
 private const val TRACK_STOP_LAYER = "track-stop-points"
 private const val TRACK_BUS_LAYER = "track-bus-circles"
+private const val TRACK_TIMES_SOURCE = "track-stop-times"
+private const val TRACK_TIMES_LAYER = "track-stop-times-layer"
 
 // Hidden while following routes, so only the followed buses and paths are on the map.
 private val BROWSE_LAYERS = listOf(CLUSTER_LAYER, "stop-cluster-count", STOP_LAYER, BUS_CIRCLE_LAYER, "bus-arrows", "bus-labels")
-private val TRACK_LAYERS = listOf("track-lines", TRACK_STOP_LAYER, TRACK_BUS_LAYER, "track-bus-arrows", "track-bus-labels")
+private val TRACK_LAYERS = listOf("track-lines", TRACK_STOP_LAYER, TRACK_BUS_LAYER, "track-bus-arrows", "track-bus-labels", TRACK_TIMES_LAYER)
 
 @Composable
 fun MapScreen(apiClient: TransitApiClient, mapStartStore: MapStartStore, onStopSelected: (Stop) -> Unit) {
@@ -224,6 +231,21 @@ fun MapScreen(apiClient: TransitApiClient, mapStartStore: MapStartStore, onStopS
                 circleRadius(Expression.interpolate(Expression.linear(), Expression.zoom(), Expression.stop(9, 2f), Expression.stop(15, 5.5f))),
             ),
         )
+        // The next arrivals at the stops in view, once zoomed in (the view model only provides them then).
+        style.addSource(GeoJsonSource(TRACK_TIMES_SOURCE, collectionOf(emptyList())))
+        style.addLayer(
+            SymbolLayer(TRACK_TIMES_LAYER, TRACK_TIMES_SOURCE).withProperties(
+                textField(Expression.get("text")),
+                textFont(MAP_BOLD_FONT),
+                textSize(11f),
+                textColor(android.graphics.Color.BLACK),
+                textHaloColor(android.graphics.Color.WHITE),
+                textHaloWidth(1.8f),
+                textAnchor(Property.TEXT_ANCHOR_TOP),
+                textOffset(arrayOf(0f, 0.8f)),
+                textJustify(Property.TEXT_JUSTIFY_LEFT),
+            ),
+        )
         style.addSource(GeoJsonSource(TRACK_BUSES_SOURCE, collectionOf(emptyList())))
         style.addLayer(
             CircleLayer(TRACK_BUS_LAYER, TRACK_BUSES_SOURCE).withFilter(NO_BEARING).withProperties(
@@ -288,6 +310,14 @@ fun MapScreen(apiClient: TransitApiClient, mapStartStore: MapStartStore, onStopS
         style.getSourceAs<GeoJsonSource>(TRACK_STOPS_SOURCE)?.setGeoJson(collectionOf(stopPoints))
         style.getSourceAs<GeoJsonSource>(TRACK_LINES_SOURCE)?.setGeoJson(collectionOf(lines))
         style.getSourceAs<GeoJsonSource>(TRACK_BUSES_SOURCE)?.setGeoJson(collectionOf(buses))
+    }
+
+    LaunchedEffect(handle.style, tracking.stopTimes, tracking.stops) {
+        val style = handle.style ?: return@LaunchedEffect
+        val stopsById = tracking.stops.values.flatMap { it.values }.flatten().associateBy { it.id }
+        style.getSourceAs<GeoJsonSource>(TRACK_TIMES_SOURCE)?.setGeoJson(
+            collectionOf(tracking.stopTimes.mapNotNull { (id, text) -> stopsById[id]?.let { featureAt(it.lat, it.lon, "text" to text) } }),
+        )
     }
 
     // When a route is added, frame everything being followed so the new one is in view.
@@ -406,6 +436,9 @@ fun MapScreen(apiClient: TransitApiClient, mapStartStore: MapStartStore, onStopS
             }
 
             MapCompass(handle, modifier = Modifier.align(Alignment.TopEnd).padding(16.dp))
+            MapMenu(modifier = Modifier.align(Alignment.TopEnd).padding(top = 68.dp, end = 16.dp)) {
+                MapToggle("Next 2 times at stops (zoom in)", tracking.showStopTimes, viewModel::setShowStopTimes)
+            }
 
             FloatingActionButton(
                 onClick = {
@@ -455,5 +488,6 @@ private fun MapLibreMap.currentViewport(): Viewport {
         minLon = bounds.longitudeWest,
         maxLat = bounds.latitudeNorth,
         maxLon = bounds.longitudeEast,
+        zoom = cameraPosition.zoom,
     )
 }

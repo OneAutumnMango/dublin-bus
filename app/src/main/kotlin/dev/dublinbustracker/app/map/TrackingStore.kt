@@ -9,6 +9,7 @@ data class SavedTracking(
     val routes: List<TrackedRoute> = emptyList(),
     val hidden: Set<Pair<String, String>> = emptySet(),
     val showStops: Boolean = true,
+    val showStopTimes: Boolean = false,
 )
 
 interface TrackingStore {
@@ -35,6 +36,7 @@ class SharedPreferencesTrackingStore(context: Context) : TrackingStore {
             entry.split("|").takeIf { it.size == 2 }?.let { it[0] to it[1] }
         }.toSet(),
         showStops = prefs.getBoolean(SHOW_STOPS, true),
+        showStopTimes = prefs.getBoolean(SHOW_STOP_TIMES, false),
     )
 
     override fun save(saved: SavedTracking) = prefs.edit {
@@ -42,6 +44,7 @@ class SharedPreferencesTrackingStore(context: Context) : TrackingStore {
         putString(ROUTES, saved.routes.joinToString(";") { "${it.name}:${it.colourIndex}" })
         putString(HIDDEN, saved.hidden.joinToString(";") { "${it.first}|${it.second}" })
         putBoolean(SHOW_STOPS, saved.showStops)
+        putBoolean(SHOW_STOP_TIMES, saved.showStopTimes)
     }
 
     private companion object {
@@ -49,5 +52,6 @@ class SharedPreferencesTrackingStore(context: Context) : TrackingStore {
         const val ROUTES = "routes"
         const val HIDDEN = "hidden"
         const val SHOW_STOPS = "show_stops"
+        const val SHOW_STOP_TIMES = "show_stop_times"
     }
 }
