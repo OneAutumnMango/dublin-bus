@@ -20,6 +20,8 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -28,7 +30,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import dev.dublinbustracker.core.directionCompass
 import dev.dublinbustracker.data.RouteProfile
+import dev.dublinbustracker.data.TransitApiClient
+import dev.dublinbustracker.data.summary
 
 /**
  * Saved route selections: tap one to bring it back, bin the ones you no longer want, or name what is on the map
@@ -36,6 +41,7 @@ import dev.dublinbustracker.data.RouteProfile
  */
 @Composable
 fun RouteProfilesDialog(
+    apiClient: TransitApiClient,
     profiles: List<RouteProfile>,
     followedCount: Int,
     onLoad: (RouteProfile) -> Unit,
@@ -44,6 +50,21 @@ fun RouteProfilesDialog(
     onDismiss: () -> Unit,
 ) {
     var name by remember { mutableStateOf("") }
+    // Which way a route's one switched-on direction heads is worked out from its stops, asked for as the list is shown.
+    val headings = remember { mutableStateMapOf<Pair<String, String>, String>() }
+    LaunchedEffect(profiles) {
+        profiles.forEach { profile ->
+            profile.routes.forEach { route ->
+                val off = profile.hidden.filter { it.route == route.name }.map { it.direction }.toSet()
+                val on = listOf("0", "1").filterNot { it in off }
+                val key = on.singleOrNull()?.let { route.name to it } ?: return@forEach
+                if (key in headings) return@forEach
+                runCatching { apiClient.routeStops(route.name, key.second) }.getOrNull()
+                    ?.let(::directionCompass)
+                    ?.let { headings[key] = it }
+            }
+        }
+    }
     val replaces = profiles.any { it.name.equals(name.trim(), ignoreCase = true) }
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -62,7 +83,7 @@ fun RouteProfilesDialog(
                                 Column(modifier = Modifier.weight(1f).padding(vertical = 8.dp)) {
                                     Text(profile.name, style = MaterialTheme.typography.bodyLarge)
                                     Text(
-                                        profile.routes.joinToString(", ") { it.name },
+                                        profile.summary { route, direction -> headings[route to direction] },
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         maxLines = 1,

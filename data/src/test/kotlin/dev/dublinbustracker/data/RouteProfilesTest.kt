@@ -57,4 +57,18 @@ class RouteProfilesTest {
         assertEquals(emptyList(), RouteProfilesRepository(storage).profiles.value)
         assertEquals(emptyList(), RouteProfilesRepository(FakeStorage("nonsense")).profiles.value)
     }
+
+    @Test
+    fun `the summary names a direction only where just one of a route's two is on`() {
+        val headings = mapOf(("4" to "1") to "NW", ("11" to "1") to "NW")
+        val both = profile("A", "4", "11")
+        val one = profile("B", "4", "11", hidden = listOf(HiddenDirection("4", "0"), HiddenDirection("11", "0")))
+        val mixed = profile("C", "4", "11", hidden = listOf(HiddenDirection("4", "1")))
+        val none = profile("D", "4", hidden = listOf(HiddenDirection("4", "0"), HiddenDirection("4", "1")))
+
+        assertEquals("4, 11", both.summary { r, d -> headings[r to d] })
+        assertEquals("4 (NW), 11 (NW)", one.summary { r, d -> headings[r to d] })
+        assertEquals("4 (direction 0), 11", mixed.summary { r, d -> headings[r to d] })
+        assertEquals("4 (off)", none.summary { _, _ -> null })
+    }
 }

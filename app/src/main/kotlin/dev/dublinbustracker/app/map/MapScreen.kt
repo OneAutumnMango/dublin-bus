@@ -340,6 +340,7 @@ fun MapScreen(apiClient: TransitApiClient, mapStartStore: MapStartStore, routePr
 
     if (showProfiles) {
         RouteProfilesDialog(
+            apiClient = apiClient,
             profiles = profiles,
             followedCount = tracking.routes.size,
             onLoad = {

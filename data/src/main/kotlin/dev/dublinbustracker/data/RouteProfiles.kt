@@ -22,6 +22,21 @@ data class RouteProfile(
     val hidden: List<HiddenDirection> = emptyList(),
 )
 
+/**
+ * One line naming the routes, such as "4 (NW), 11": a route with both directions on is just its number, and one with only
+ * one on says which way it heads ([headingOf] gives a compass point for a route and direction id, or null if not known yet).
+ */
+fun RouteProfile.summary(headingOf: (route: String, direction: String) -> String?): String =
+    routes.joinToString(", ") { route ->
+        val off = hidden.filter { it.route == route.name }.map { it.direction }.toSet()
+        val on = listOf("0", "1").filterNot { it in off }
+        when (on.size) {
+            2 -> route.name
+            0 -> "${route.name} (off)"
+            else -> "${route.name} (${headingOf(route.name, on.single()) ?: "direction ${on.single()}"})"
+        }
+    }
+
 /** The user's saved route selections, kept in the order they were first saved. */
 class RouteProfilesRepository(private val storage: FavouritesStorage) {
     private val json = Json { ignoreUnknownKeys = true }
