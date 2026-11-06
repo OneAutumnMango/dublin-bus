@@ -74,4 +74,19 @@ class ProximityTest {
     fun `nothing to sort is nothing back`() {
         assertEquals(emptyList(), sortedByDistance(emptyList<Place>(), dublin) { it.position })
     }
+
+    @Test
+    fun `compass points follow north, east, south and west`() {
+        assertEquals("N", compassPoint(dublin, LatLon(dublin.lat + 0.1, dublin.lon)))
+        assertEquals("E", compassPoint(dublin, LatLon(dublin.lat, dublin.lon + 0.1)))
+        assertEquals("S", compassPoint(dublin, LatLon(dublin.lat - 0.1, dublin.lon)))
+        assertEquals("W", compassPoint(dublin, LatLon(dublin.lat, dublin.lon - 0.1)))
+        assertEquals("NW", compassPoint(dublin, LatLon(dublin.lat + 0.1, dublin.lon - 0.15)))
+    }
+
+    @Test
+    fun `a direction with fewer than two stops has no compass point`() {
+        assertEquals(null, directionCompass(emptyList()))
+        assertEquals(null, directionCompass(listOf(Stop("a", "1", "A", 53.0, -6.0))))
+    }
 }

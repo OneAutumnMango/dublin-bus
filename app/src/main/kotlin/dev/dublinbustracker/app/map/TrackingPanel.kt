@@ -52,6 +52,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.PopupProperties
 import dev.dublinbustracker.core.Route
+import dev.dublinbustracker.core.directionCompass
 import dev.dublinbustracker.core.legendFor
 import dev.dublinbustracker.core.trackingColour
 
@@ -152,7 +153,8 @@ fun TrackingPanel(
                                             text = {
                                                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                                     Dot(Color(trackingColour(index, entry.directionId)))
-                                                    Text("${entry.route} to ${entry.headsign.ifBlank { "direction ${entry.directionId}" }}")
+                                                    val compass = directionCompass(state.stops[entry.route]?.get(entry.directionId).orEmpty())?.let { " ($it)" }.orEmpty()
+                                                    Text("${entry.route} to ${entry.headsign.ifBlank { "direction ${entry.directionId}" }}$compass")
                                                 }
                                             },
                                             // The menu stays open, so several can be switched without reopening it.
