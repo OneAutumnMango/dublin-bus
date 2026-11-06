@@ -85,7 +85,7 @@ fun ProfilesGroup(
         OutlinedTextField(
             value = name,
             onValueChange = { name = it },
-            label = { Text("Name the routes on the map") },
+            label = { Text("Profile name") },
             supportingText = {
                 Text(
                     when {
