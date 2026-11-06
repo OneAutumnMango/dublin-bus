@@ -103,15 +103,15 @@ private val TRACK_LAYERS = listOf("track-lines", TRACK_STOP_LAYER, TRACK_BUS_LAY
 
 @Composable
 fun MapScreen(apiClient: TransitApiClient, onStopSelected: (Stop) -> Unit) {
+    val context = LocalContext.current
     val viewModel = viewModel<MapViewModel>(
-        factory = viewModelFactory { initializer { MapViewModel(apiClient) } },
+        factory = viewModelFactory { initializer { MapViewModel(apiClient, SharedPreferencesTrackingStore(context.applicationContext)) } },
     )
     val state by viewModel.uiState.collectAsState()
     val showBuses by viewModel.showBuses.collectAsState()
     val tracking by viewModel.tracking.collectAsState()
     val suggestions by viewModel.suggestions.collectAsState()
     PollWhileVisible(BUS_REFRESH_MS, viewModel::poll)
-    val context = LocalContext.current
     val handle = rememberMapHandle()
     val latestStops by rememberUpdatedState(state.stops)
     val latestOnStopSelected by rememberUpdatedState(onStopSelected)

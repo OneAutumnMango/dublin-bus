@@ -3,6 +3,9 @@ package dev.dublinbustracker.app
 import dev.dublinbustracker.app.detail.ArrivalsUiState
 import dev.dublinbustracker.app.detail.StopDetailViewModel
 import dev.dublinbustracker.app.map.MapViewModel
+import dev.dublinbustracker.app.map.SavedTracking
+import dev.dublinbustracker.app.map.TrackedRoute
+import dev.dublinbustracker.app.map.TrackingStore
 import dev.dublinbustracker.app.map.Viewport
 import dev.dublinbustracker.app.route.RouteMapViewModel
 import dev.dublinbustracker.core.Stop
@@ -141,5 +144,29 @@ class ViewModelTest {
 
         vm.poll()
         waitFor { requests.get() == settled + 1 }
+    }
+
+    @Test
+    fun `followed routes and hidden directions come back after a restart, and changes are saved`() {
+        val store = object : TrackingStore {
+            var saved = SavedTracking(true, listOf(TrackedRoute("S8", 2)), setOf("S8" to "1"), showStops = false)
+            override fun load() = saved
+            override fun save(saved: SavedTracking) {
+                this.saved = saved
+            }
+        }
+        val vm = MapViewModel(client { "[]" }, store)
+
+        val state = vm.tracking.value
+        assertEquals(listOf("S8"), state.routes.map { it.name })
+        assertTrue(state.enabled)
+        assertEquals(setOf("S8" to "1"), state.hidden)
+        assertEquals(false, state.showStops)
+
+        vm.toggleDirection("S8", "0")
+        assertEquals(setOf("S8" to "1", "S8" to "0"), store.saved.hidden)
+        vm.removeRoute("S8")
+        assertEquals(emptyList(), store.saved.routes)
+        assertEquals(emptySet(), store.saved.hidden)
     }
 }

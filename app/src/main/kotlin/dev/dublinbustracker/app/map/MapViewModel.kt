@@ -22,6 +22,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -70,7 +72,10 @@ private const val SUGGEST_DEBOUNCE_MS = 250L
 private const val PAN_DEBOUNCE_MS = 400L
 private const val MAX_RADIUS_METERS = 5_000
 
-class MapViewModel(private val apiClient: TransitApiClient) : ViewModel() {
+class MapViewModel(
+    private val apiClient: TransitApiClient,
+    private val store: TrackingStore = NoTrackingStore,
+) : ViewModel() {
     private val _uiState = MutableStateFlow(MapUiState())
     val uiState: StateFlow<MapUiState> = _uiState.asStateFlow()
 
@@ -80,13 +85,52 @@ class MapViewModel(private val apiClient: TransitApiClient) : ViewModel() {
     private var loadJob: Job? = null
     private var lastViewport: Viewport? = null
 
-    private val _tracking = MutableStateFlow(TrackingUiState())
+    private val saved = store.load()
+    private val _tracking = MutableStateFlow(
+        TrackingUiState(enabled = saved.enabled, routes = saved.routes, hidden = saved.hidden, showStops = saved.showStops),
+    )
     val tracking: StateFlow<TrackingUiState> = _tracking.asStateFlow()
 
     private val _suggestions = MutableStateFlow<List<Route>>(emptyList())
     /** Routes matching what's been typed in the add-a-route box. */
     val suggestions: StateFlow<List<Route>> = _suggestions.asStateFlow()
     private var suggestJob: Job? = null
+
+    init {
+        viewModelScope.launch {
+            _tracking.map { SavedTracking(it.enabled, it.routes, it.hidden, it.showStops) }.distinctUntilChanged().collect(store::save)
+        }
+        saved.routes.forEach { route -> viewModelScope.launch { restore(route.name) } }
+    }
+
+    /** Fetches a route remembered from last time. Unlike adding one, a failure keeps it listed; its buses come with the next refresh. */
+    private suspend fun restore(name: String) {
+        val vehicles = runCatching { apiClient.vehiclesForRoute(name) }.getOrNull()
+        val (shapes, stops) = fetchPaths(name)
+        _tracking.update { state ->
+            if (state.routes.none { it.name == name }) {
+                state
+            } else {
+                state.copy(
+                    vehicles = if (vehicles != null) state.vehicles + (name to vehicles) else state.vehicles,
+                    shapes = state.shapes + (name to shapes),
+                    stops = state.stops + (name to stops),
+                )
+            }
+        }
+    }
+
+    /** A route's path and stops in both directions. They're a nicety: if they can't be fetched the buses still show. */
+    private suspend fun fetchPaths(name: String): Pair<Map<String, List<LatLon>>, Map<String, List<Stop>>> = coroutineScope {
+        val directions = listOf("0", "1")
+        val shapeCalls = directions.map { direction ->
+            async { runCatching { apiClient.routeShape(name, direction) }.getOrNull()?.let { direction to it } }
+        }
+        val stopCalls = directions.map { direction ->
+            async { runCatching { apiClient.routeStops(name, direction) }.getOrNull()?.let { direction to it } }
+        }
+        shapeCalls.awaitAll().filterNotNull().toMap() to stopCalls.awaitAll().filterNotNull().toMap()
+    }
 
     fun onRouteQueryChanged(query: String) {
         suggestJob?.cancel()
@@ -136,17 +180,7 @@ class MapViewModel(private val apiClient: TransitApiClient) : ViewModel() {
                 _tracking.update { it.copy(busy = true, message = null) }
                 runCatching { apiClient.vehiclesForRoute(name) }.fold(
                     onSuccess = { vehicles ->
-                        // A route's path is a nicety: if it can't be fetched the buses still show.
-                        val directions = listOf("0", "1")
-                        val (shapes, stops) = coroutineScope {
-                            val shapeCalls = directions.map { direction ->
-                                async { runCatching { apiClient.routeShape(name, direction) }.getOrNull()?.let { direction to it } }
-                            }
-                            val stopCalls = directions.map { direction ->
-                                async { runCatching { apiClient.routeStops(name, direction) }.getOrNull()?.let { direction to it } }
-                            }
-                            shapeCalls.awaitAll().filterNotNull().toMap() to stopCalls.awaitAll().filterNotNull().toMap()
-                        }
+                        val (shapes, stops) = fetchPaths(name)
                         _tracking.update { state ->
                             state.copy(
                                 routes = state.routes + TrackedRoute(name, nextColourIndex(state.routes.map { it.colourIndex })),
