@@ -86,20 +86,15 @@ fun TrackingPanel(
     // was most of what made the panel so tall.
     CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
         Column(
-            modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 12.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             if (!expanded) {
                 CollapsedSummary(state, onExpand = { expanded = true }, modeToggle = modeToggle)
                 return@Column
             }
 
-            // No automatic gaps in this column: the route box keeps its own 4dp beneath it, and the chips row sits
-            // directly under the Directions row, whose arrow button already gives it a few dp of air.
-            Row(
-                modifier = Modifier.padding(bottom = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 Box(modifier = Modifier.weight(1f)) {
                     CompactField(
                         value = text,
@@ -130,9 +125,7 @@ fun TrackingPanel(
                 modeToggle()
             }
 
-            state.message?.let {
-                Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(bottom = 4.dp))
-            }
+            state.message?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
 
             if (state.routes.isNotEmpty()) {
                 val directions = legendFor(state.routes.map { it.name }, state.vehicles, state.destinations)
@@ -177,8 +170,7 @@ fun TrackingPanel(
                 }
 
                 // The routes followed, each with an X to stop following it, on a row of their own.
-                // 4dp of air already comes from the arrow button above; 2dp more makes the gap 6dp.
-                Row(modifier = Modifier.padding(top = 2.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     state.routes.forEach { route ->
                         InputChip(
                             selected = false,
