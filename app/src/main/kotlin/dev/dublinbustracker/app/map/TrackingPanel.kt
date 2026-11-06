@@ -86,7 +86,7 @@ fun TrackingPanel(
     // was most of what made the panel so tall.
     CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
         Column(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+            modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 6.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             if (!expanded) {
