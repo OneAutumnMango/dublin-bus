@@ -25,6 +25,9 @@ import java.util.concurrent.TimeUnit
 private fun defaultHttpClient(): OkHttpClient =
     OkHttpClient.Builder()
         .callTimeout(20, TimeUnit.SECONDS)
+        // The server never redirects, but a login wall in front of it (Cloudflare Access) does when
+        // the headers are wrong. Following it would hand back an HTML page and a baffling parse error.
+        .followRedirects(false)
         .build()
 
 @Serializable
@@ -276,7 +279,8 @@ class TransitApiClient(
     private fun describe(code: Int, body: String): String {
         val serverMessage = runCatching { json.decodeFromString<ErrorDto>(body).error }.getOrNull()
         return when {
-            code == 401 -> "Rejected by the server (401) - check the auth headers in Settings"
+            code == 401 || code == 403 -> "Rejected by the server ($code) - check the auth headers in Settings"
+            code in 300..399 -> "Sent to a login page ($code) - check the auth headers in Settings"
             code == 404 -> serverMessage?.takeIf { it.isNotBlank() } ?: "Not found (404)"
             !serverMessage.isNullOrBlank() -> "$serverMessage ($code)"
             else -> "Server returned HTTP $code"

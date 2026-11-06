@@ -134,6 +134,28 @@ class TransitApiClientTest {
     }
 
     @Test
+    fun `a 403 from the login wall in front of the server explains the headers are wrong`() = runTest {
+        server.enqueue(MockResponse().setResponseCode(403).setBody("<html>Forbidden</html>"))
+
+        val error = assertFailsWith<TransitApiException> { client().searchStops("x") }
+
+        assertEquals(403, error.statusCode)
+        assertTrue(error.message!!.contains("auth headers"), error.message!!)
+    }
+
+    @Test
+    fun `a redirect to a login page is reported, not followed`() = runTest {
+        server.enqueue(MockResponse().setResponseCode(302).setHeader("Location", "/login"))
+        server.enqueue(MockResponse().setBody("<html>Sign in</html>"))
+
+        val error = assertFailsWith<TransitApiException> { client().searchStops("x") }
+
+        assertEquals(302, error.statusCode)
+        assertTrue(error.message!!.contains("login page"), error.message!!)
+        assertEquals(1, server.requestCount)
+    }
+
+    @Test
     fun `a server error message is surfaced to the caller`() = runTest {
         server.enqueue(MockResponse().setResponseCode(404).setBody("""{"error":"unknown stop"}"""))
 
