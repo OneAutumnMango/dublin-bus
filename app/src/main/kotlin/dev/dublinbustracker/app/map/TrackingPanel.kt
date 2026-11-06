@@ -130,7 +130,6 @@ fun TrackingPanel(
             if (state.routes.isNotEmpty()) {
                 val directions = legendFor(state.routes.map { it.name }, state.vehicles, state.destinations)
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    // One scrolling row instead of three. The two controls come first so they are always in view, and the route chips scroll after them.
                     Row(
                         modifier = Modifier.weight(1f).horizontalScroll(rememberScrollState()),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -164,18 +163,22 @@ fun TrackingPanel(
                             }
                             FilterChip(selected = state.showStops, onClick = { onShowStops(!state.showStops) }, label = { Text("Stops") })
                         }
-                        state.routes.forEach { route ->
-                            InputChip(
-                                selected = false,
-                                onClick = { onRemove(route.name) },
-                                label = { Text(route.name) },
-                                leadingIcon = { Dot(Color(trackingColour(route.colourIndex, "0"))) },
-                                trailingIcon = { Icon(Icons.Filled.Close, contentDescription = "Remove ${route.name}", modifier = Modifier.size(16.dp)) },
-                            )
-                        }
                     }
                     IconButton(onClick = { expanded = false }, modifier = Modifier.size(40.dp)) {
                         Icon(Icons.Filled.KeyboardArrowUp, contentDescription = "Hide route controls")
+                    }
+                }
+
+                // The routes followed, each with an X to stop following it, on a row of their own.
+                Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    state.routes.forEach { route ->
+                        InputChip(
+                            selected = false,
+                            onClick = { onRemove(route.name) },
+                            label = { Text(route.name) },
+                            leadingIcon = { Dot(Color(trackingColour(route.colourIndex, "0"))) },
+                            trailingIcon = { Icon(Icons.Filled.Close, contentDescription = "Remove ${route.name}", modifier = Modifier.size(16.dp)) },
+                        )
                     }
                 }
             }
