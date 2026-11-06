@@ -4,10 +4,7 @@ import android.content.Context
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.material.icons.filled.Route
-import androidx.compose.material3.FilledTonalIconToggleButton
 import dev.dublinbustracker.app.bus.BusInfoSheet
 import dev.dublinbustracker.app.location.LOCATION_PERMISSIONS
 import dev.dublinbustracker.app.location.hasLocationPermission
@@ -31,27 +28,24 @@ import org.maplibre.geojson.Feature
 import org.maplibre.geojson.LineString
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenuItem
 import dev.dublinbustracker.data.RouteProfilesRepository
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -128,7 +122,7 @@ fun MapScreen(apiClient: TransitApiClient, mapStartStore: MapStartStore, routePr
     val latestOnStopSelected by rememberUpdatedState(onStopSelected)
     val latestTracking by rememberUpdatedState(tracking)
     var infoTripId by remember { mutableStateOf<String?>(null) }
-    var showProfiles by remember { mutableStateOf(false) }
+    var showOptions by remember { mutableStateOf(false) }
     // Set when a profile is picked: the camera then frames its routes as soon as their paths have come in.
     var pendingFrame by remember { mutableStateOf(false) }
     val profiles by routeProfiles.profiles.collectAsState()
@@ -338,20 +332,34 @@ fun MapScreen(apiClient: TransitApiClient, mapStartStore: MapStartStore, routePr
         }
     }
 
-    if (showProfiles) {
-        RouteProfilesDialog(
-            apiClient = apiClient,
-            profiles = profiles,
-            followedCount = tracking.routes.size,
-            onLoad = {
-                viewModel.loadProfile(it)
-                pendingFrame = true
-                showProfiles = false
-            },
-            onSave = { routeProfiles.save(viewModel.currentProfile(it)) },
-            onDelete = { routeProfiles.delete(it.name) },
-            onDismiss = { showProfiles = false },
-        )
+    if (showOptions) {
+        MapOptionsSheet(onDismiss = { showOptions = false }) {
+            OptionGroup("Map") {
+                SwitchRow("Follow routes", tracking.enabled, viewModel::setTracking, description = "Show only your routes, hiding other stops and buses")
+            }
+            OptionGroup("Show") {
+                SwitchRow("Nearby buses", showBuses, { viewModel.toggleBuses() }, description = "While browsing, not following")
+                SwitchRow("Route stops", tracking.showStops, viewModel::setShowStops)
+                SwitchRow("Next 2 times at stops", tracking.showStopTimes, viewModel::setShowStopTimes, description = "On your routes, when zoomed in")
+            }
+            if (tracking.routes.isNotEmpty()) {
+                OptionGroup("Directions") { DirectionsList(tracking, viewModel::toggleDirection) }
+            }
+            OptionGroup("Profiles") {
+                ProfilesGroup(
+                    apiClient = apiClient,
+                    profiles = profiles,
+                    followedCount = tracking.routes.size,
+                    onLoad = {
+                        viewModel.loadProfile(it)
+                        pendingFrame = true
+                        showOptions = false
+                    },
+                    onSave = { routeProfiles.save(viewModel.currentProfile(it)) },
+                    onDelete = { routeProfiles.delete(it.name) },
+                )
+            }
+        }
     }
 
     // When a route is added, frame everything being followed so the new one is in view.
@@ -421,37 +429,14 @@ fun MapScreen(apiClient: TransitApiClient, mapStartStore: MapStartStore, routePr
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        val modeToggle: @Composable () -> Unit = {
-            FilledTonalIconToggleButton(checked = tracking.enabled, onCheckedChange = viewModel::setTracking) {
-                Icon(Icons.Filled.Route, contentDescription = if (tracking.enabled) "Stop following routes" else "Follow routes")
-            }
-        }
-
-        if (!tracking.enabled) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                FilterChip(
-                    selected = showBuses,
-                    onClick = viewModel::toggleBuses,
-                    label = { Text(if (showBuses) "Buses shown" else "Show buses") },
-                )
-                Spacer(modifier = Modifier.weight(1f))
-                modeToggle()
-            }
-        } else {
-            TrackingPanel(
-                state = tracking,
-                suggestions = suggestions,
-                onQueryChanged = viewModel::onRouteQueryChanged,
-                onAdd = viewModel::addRoute,
-                onRemove = viewModel::removeRoute,
-                onToggleDirection = viewModel::toggleDirection,
-                onShowStops = viewModel::setShowStops,
-                modeToggle = modeToggle,
-            )
-        }
+        RouteBar(
+            state = tracking,
+            suggestions = suggestions,
+            onQueryChanged = viewModel::onRouteQueryChanged,
+            onAdd = viewModel::addRoute,
+            onRemove = viewModel::removeRoute,
+            onOptions = { showOptions = true },
+        )
 
         state.message?.let {
             Text(
@@ -470,11 +455,6 @@ fun MapScreen(apiClient: TransitApiClient, mapStartStore: MapStartStore, routePr
             }
 
             MapCompass(handle, modifier = Modifier.align(Alignment.TopEnd).padding(16.dp))
-            MapMenu(modifier = Modifier.align(Alignment.TopEnd).padding(top = 68.dp, end = 16.dp)) { close ->
-                MapToggle("Next 2 times at stops", tracking.showStopTimes, viewModel::setShowStopTimes)
-                DropdownMenuItem(text = { Text("Route profiles...") }, onClick = { close(); showProfiles = true })
-            }
-
             FloatingActionButton(
                 onClick = {
                     if (hasLocationPermission(context)) {

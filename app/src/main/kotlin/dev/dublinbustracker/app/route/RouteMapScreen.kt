@@ -44,10 +44,15 @@ import dev.dublinbustracker.app.map.MAP_BLUE
 import dev.dublinbustracker.app.map.BUS_LABEL_SIZE_SP
 import dev.dublinbustracker.app.map.BUS_CIRCLE_RADIUS_DP
 import dev.dublinbustracker.app.map.MapCompass
+import androidx.compose.material3.IconButton
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material3.Icon
+import dev.dublinbustracker.app.map.SwitchRow
+import dev.dublinbustracker.app.map.OptionGroup
+import dev.dublinbustracker.app.map.MapOptionsSheet
 import dev.dublinbustracker.core.busesUpToStop
 import dev.dublinbustracker.app.map.rememberMapFlag
-import dev.dublinbustracker.app.map.MapToggle
-import dev.dublinbustracker.app.map.MapMenu
 import dev.dublinbustracker.app.ui.PollWhileVisible
 import dev.dublinbustracker.app.ui.ScreenHeader
 import dev.dublinbustracker.app.map.MAP_BOLD_FONT
@@ -143,6 +148,7 @@ fun RouteMapScreen(stop: Stop, arrival: Arrival, apiClient: TransitApiClient, on
 
     var showStops by remember { mutableStateOf(true) }
     val hidePast = rememberMapFlag("hide_buses_past_stop", false)
+    var showOptions by remember { mutableStateOf(false) }
     // Optionally only the buses up to this stop, plus the one that has just gone past it.
     val shownVehicles = remember(state.vehicles, state.data, hidePast.value) {
         val stops = state.data?.stops
@@ -289,7 +295,7 @@ fun RouteMapScreen(stop: Stop, arrival: Arrival, apiClient: TransitApiClient, on
             subtitle = "Viewing ${stop.name} (${stop.code})",
             onBack = onBack,
         )
-        Legend(busCount = shownVehicles.size, showStops = showStops, onShowStops = { showStops = it })
+        Legend(busCount = shownVehicles.size, onOptions = { showOptions = true })
 
         state.error?.let {
             Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(16.dp))
@@ -301,9 +307,6 @@ fun RouteMapScreen(stop: Stop, arrival: Arrival, apiClient: TransitApiClient, on
                 CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
             }
             MapCompass(handle, modifier = Modifier.align(Alignment.TopEnd).padding(16.dp))
-            MapMenu(modifier = Modifier.align(Alignment.TopEnd).padding(top = 68.dp, end = 16.dp)) {
-                MapToggle("Hide buses past this stop", hidePast.value, hidePast::set)
-            }
             tappedLabel?.let {
                 Surface(
                     modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp),
@@ -312,6 +315,15 @@ fun RouteMapScreen(stop: Stop, arrival: Arrival, apiClient: TransitApiClient, on
                 ) {
                     Text(it, modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp))
                 }
+            }
+        }
+    }
+
+    if (showOptions) {
+        MapOptionsSheet(onDismiss = { showOptions = false }) {
+            OptionGroup("Show") {
+                SwitchRow("Route stops", showStops, { showStops = it })
+                SwitchRow("Hide buses past this stop", hidePast.value, hidePast::set, description = "Keeps only the one that has just gone by")
             }
         }
     }
@@ -329,7 +341,7 @@ fun RouteMapScreen(stop: Stop, arrival: Arrival, apiClient: TransitApiClient, on
 }
 
 @Composable
-private fun Legend(busCount: Int, showStops: Boolean, onShowStops: (Boolean) -> Unit) {
+private fun Legend(busCount: Int, onOptions: () -> Unit) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -339,7 +351,7 @@ private fun Legend(busCount: Int, showStops: Boolean, onShowStops: (Boolean) -> 
         LegendItem(Color(YOUR_BUS_COLOR), "Your bus")
         LegendItem(Color(OTHER_BUS_COLOR), if (busCount == 1) "1 bus" else "$busCount buses")
         Spacer(modifier = Modifier.weight(1f))
-        FilterChip(selected = showStops, onClick = { onShowStops(!showStops) }, label = { Text("Stops") })
+        IconButton(onClick = onOptions) { Icon(Icons.Filled.Tune, contentDescription = "Map options") }
     }
 }
 

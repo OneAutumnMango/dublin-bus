@@ -298,6 +298,7 @@ class MapViewModel(
                         val (shapes, stops) = fetchPaths(name)
                         _tracking.update { state ->
                             state.copy(
+                                enabled = true, // adding a route means you want to see it
                                 routes = state.routes + TrackedRoute(name, nextColourIndex(state.routes.map { it.colourIndex })),
                                 vehicles = state.vehicles + (name to trackedBearings.withBearings(vehicles)),
                                 shapes = state.shapes + (name to shapes),

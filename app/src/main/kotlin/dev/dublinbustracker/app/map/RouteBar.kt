@@ -1,6 +1,7 @@
 package dev.dublinbustracker.app.map
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -19,14 +20,10 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material3.AssistChip
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -40,7 +37,6 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -57,26 +53,20 @@ import dev.dublinbustracker.core.legendFor
 import dev.dublinbustracker.core.trackingColour
 
 /**
- * Route-following controls: a box that suggests routes as you type, the routes followed, and a
- * dropdown listing each direction of them (e.g. "4 to Heuston Station") to switch on or off.
- * An arrow folds it down to a single slim row so the map gets the screen.
+ * The top of the map: a box that suggests routes as you type, the routes being followed (tap a chip's X to drop one),
+ * and the button that opens the map's options. Everything else lives in the options sheet.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TrackingPanel(
+fun RouteBar(
     state: TrackingUiState,
     suggestions: List<Route>,
     onQueryChanged: (String) -> Unit,
     onAdd: (String) -> Unit,
     onRemove: (String) -> Unit,
-    onToggleDirection: (route: String, directionId: String) -> Unit,
-    onShowStops: (Boolean) -> Unit,
-    /** The mode toggle, which sits at the end of the first row so the panel needs no row of its own for it. */
-    modeToggle: @Composable () -> Unit,
+    onOptions: () -> Unit,
 ) {
     var text by remember { mutableStateOf("") }
-    var directionsOpen by remember { mutableStateOf(false) }
-    var expanded by rememberSaveable { mutableStateOf(true) }
     val add = { name: String ->
         onAdd(name)
         text = ""
@@ -84,17 +74,12 @@ fun TrackingPanel(
     }
 
     // Chips are laid out at their drawn size rather than padded out to a 48dp touch target; that padding
-    // was most of what made the panel so tall.
+    // was most of what made the bar so tall.
     CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
         Column(
             modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 8.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            if (!expanded) {
-                CollapsedSummary(state, onExpand = { expanded = true }, modeToggle = modeToggle)
-                return@Column
-            }
-
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 Box(modifier = Modifier.weight(1f)) {
                     CompactField(
@@ -123,55 +108,15 @@ fun TrackingPanel(
                 IconButton(onClick = { add(text) }, enabled = !state.busy, modifier = Modifier.size(40.dp)) {
                     Icon(Icons.Filled.Add, contentDescription = "Add route")
                 }
-                modeToggle()
+                IconButton(onClick = onOptions, modifier = Modifier.size(40.dp)) {
+                    Icon(Icons.Filled.Tune, contentDescription = "Map options")
+                }
             }
 
             state.message?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
 
-            if (state.routes.isNotEmpty()) {
-                val directions = legendFor(state.routes.map { it.name }, state.vehicles, state.destinations)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Row(
-                        modifier = Modifier.weight(1f).horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        if (directions.isNotEmpty()) {
-                            val shown = directions.count { (it.route to it.directionId) !in state.hidden }
-                            Box {
-                                // A chip, like the Stops chip beside it, so the two are the same height and shape.
-                                AssistChip(
-                                    onClick = { directionsOpen = true },
-                                    label = { Text("Directions · $shown of ${directions.size}") },
-                                    trailingIcon = { Icon(Icons.Filled.ArrowDropDown, contentDescription = null) },
-                                )
-                                DropdownMenu(expanded = directionsOpen, onDismissRequest = { directionsOpen = false }) {
-                                    directions.forEach { entry ->
-                                        val index = state.routes.first { it.name == entry.route }.colourIndex
-                                        DropdownMenuItem(
-                                            leadingIcon = { Checkbox(checked = (entry.route to entry.directionId) !in state.hidden, onCheckedChange = null) },
-                                            text = {
-                                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                                    Dot(Color(trackingColour(index, entry.directionId)))
-                                                    val compass = directionCompass(state.stops[entry.route]?.get(entry.directionId).orEmpty())?.let { " ($it)" }.orEmpty()
-                                                    Text("${entry.route} to ${entry.headsign.ifBlank { "direction ${entry.directionId}" }}$compass")
-                                                }
-                                            },
-                                            // The menu stays open, so several can be switched without reopening it.
-                                            onClick = { onToggleDirection(entry.route, entry.directionId) },
-                                        )
-                                    }
-                                }
-                            }
-                            FilterChip(selected = state.showStops, onClick = { onShowStops(!state.showStops) }, label = { Text("Stops") })
-                        }
-                    }
-                    IconButton(onClick = { expanded = false }, modifier = Modifier.size(40.dp)) {
-                        Icon(Icons.Filled.KeyboardArrowUp, contentDescription = "Hide route controls")
-                    }
-                }
-
-                // The routes followed, each with an X to stop following it, on a row of their own.
+            // The chips are the routes drawn on the map, which only happens while following; otherwise they'd name routes that aren't shown.
+            if (state.enabled && state.routes.isNotEmpty()) {
                 Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     state.routes.forEach { route ->
                         InputChip(
@@ -188,29 +133,25 @@ fun TrackingPanel(
     }
 }
 
-/** The panel folded down: just which routes are being followed, an arrow to open it, and the mode toggle. */
+/** Each direction of each followed route (e.g. "4 to Heuston Station (NW)") with a tick to switch it on or off. */
 @Composable
-private fun CollapsedSummary(state: TrackingUiState, onExpand: () -> Unit, modeToggle: @Composable () -> Unit) {
-    Row(modifier = Modifier.fillMaxWidth().height(40.dp), verticalAlignment = Alignment.CenterVertically) {
+fun DirectionsList(state: TrackingUiState, onToggleDirection: (route: String, directionId: String) -> Unit) {
+    val directions = legendFor(state.routes.map { it.name }, state.vehicles, state.destinations)
+    if (directions.isEmpty()) {
+        Text("Directions appear once the routes have loaded.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+    directions.forEach { entry ->
+        val index = state.routes.first { it.name == entry.route }.colourIndex
+        val compass = directionCompass(state.stops[entry.route]?.get(entry.directionId).orEmpty())?.let { " ($it)" }.orEmpty()
         Row(
-            modifier = Modifier.weight(1f).horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.fillMaxWidth().clickable { onToggleDirection(entry.route, entry.directionId) },
             verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            if (state.routes.isEmpty()) {
-                Text("No routes followed", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            state.routes.forEach { route ->
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Dot(Color(trackingColour(route.colourIndex, "0")))
-                    Text(route.name, style = MaterialTheme.typography.bodyMedium)
-                }
-            }
+            Checkbox(checked = (entry.route to entry.directionId) !in state.hidden, onCheckedChange = null, modifier = Modifier.padding(vertical = 4.dp))
+            Dot(Color(trackingColour(index, entry.directionId)))
+            Text("${entry.route} to ${entry.headsign.ifBlank { "direction ${entry.directionId}" }}$compass", style = MaterialTheme.typography.bodyLarge)
         }
-        IconButton(onClick = onExpand, modifier = Modifier.size(40.dp)) {
-            Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Show route controls")
-        }
-        modeToggle()
     }
 }
 
