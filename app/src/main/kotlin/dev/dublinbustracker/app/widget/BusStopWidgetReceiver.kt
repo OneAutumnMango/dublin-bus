@@ -9,7 +9,7 @@ class BusStopWidgetReceiver : GlanceAppWidgetReceiver() {
 
     override fun onDeleted(context: Context, appWidgetIds: IntArray) {
         super.onDeleted(context, appWidgetIds)
-        val store = WidgetStopStore(context)
+        val store = WidgetConfigStore(context)
         appWidgetIds.forEach { store.remove(it) }
     }
 }
