@@ -19,7 +19,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -34,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import dev.dublinbustracker.app.map.OfflineMaps
 import dev.dublinbustracker.app.map.rememberMapHandle
+import dev.dublinbustracker.app.ui.ScreenHeader
 import dev.dublinbustracker.core.AREA_PRESETS
 import dev.dublinbustracker.core.AreaPreset
 import dev.dublinbustracker.core.GeoBounds
@@ -88,16 +88,10 @@ fun ChooseAreaScreen(onBack: () -> Unit) {
     val tooBig = tiles != null && tiles > MAX_AREA_TILES
 
     Column(modifier = Modifier.fillMaxSize()) {
-        Row(modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 8.dp)) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text("Choose an area", style = MaterialTheme.typography.titleMedium)
-                Text("Fit what you want inside the frame", style = MaterialTheme.typography.bodySmall)
-            }
-            TextButton(onClick = onBack) { Text("Cancel") }
-        }
+        ScreenHeader(title = "Choose an area", subtitle = "Fit what you want inside the frame", onBack = onBack)
 
         Row(
-            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp),
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             AREA_PRESETS.forEach { preset ->
@@ -111,7 +105,7 @@ fun ChooseAreaScreen(onBack: () -> Unit) {
             }
         }
 
-        Box(modifier = Modifier.weight(1f).fillMaxWidth().padding(top = 8.dp)) {
+        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             AndroidView(modifier = Modifier.fillMaxSize(), factory = { handle.view })
             // Purely visual: it has no touch handling, so panning and pinching reach the map beneath.
             Box(

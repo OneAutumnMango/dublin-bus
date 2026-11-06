@@ -17,6 +17,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.FilterChip
@@ -25,7 +26,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.InputChip
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -68,7 +68,7 @@ fun TrackingPanel(
         onQueryChanged("")
     }
 
-    Column(modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    Column(modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             Box(modifier = Modifier.weight(1f)) {
                 OutlinedTextField(
@@ -121,10 +121,12 @@ fun TrackingPanel(
                 val shown = directions.count { (it.route to it.directionId) !in state.hidden }
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Box {
-                        OutlinedButton(onClick = { directionsOpen = true }) {
-                            Text("Directions · $shown of ${directions.size}")
-                            Icon(Icons.Filled.ArrowDropDown, contentDescription = null)
-                        }
+                        // A chip, like the Stops chip beside it, so the two are the same height and shape.
+                        AssistChip(
+                            onClick = { directionsOpen = true },
+                            label = { Text("Directions · $shown of ${directions.size}") },
+                            trailingIcon = { Icon(Icons.Filled.ArrowDropDown, contentDescription = null) },
+                        )
                         DropdownMenu(expanded = directionsOpen, onDismissRequest = { directionsOpen = false }) {
                             directions.forEach { entry ->
                                 val index = state.routes.first { it.name == entry.route }.colourIndex

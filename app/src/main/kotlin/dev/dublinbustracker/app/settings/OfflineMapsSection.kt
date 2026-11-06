@@ -1,6 +1,5 @@
 package dev.dublinbustracker.app.settings
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -24,6 +23,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import dev.dublinbustracker.app.map.DownloadedArea
 import dev.dublinbustracker.app.map.OfflineMaps
+import dev.dublinbustracker.app.ui.SettingsSection
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -44,13 +44,10 @@ fun OfflineMapsSection(onChooseArea: () -> Unit) {
         }
     }
 
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("Offline maps", style = MaterialTheme.typography.titleMedium)
-        Text(
-            "Download areas so the map opens quickly and still shows without a signal.",
-            style = MaterialTheme.typography.bodySmall,
-        )
-
+    SettingsSection(
+        title = "Offline maps",
+        description = "Download areas so the map opens quickly and still shows without a signal.",
+    ) {
         areas.forEach { area ->
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Column(modifier = Modifier.weight(1f)) {
@@ -64,7 +61,7 @@ fun OfflineMapsSection(onChooseArea: () -> Unit) {
                             areas = OfflineMaps.list(context)
                         }
                     },
-                ) { Icon(Icons.Filled.Delete, contentDescription = "Delete ${area.name}") }
+                ) { Icon(Icons.Filled.Delete, contentDescription = "Delete ${area.name}", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
             }
         }
         if (areas.isEmpty()) {

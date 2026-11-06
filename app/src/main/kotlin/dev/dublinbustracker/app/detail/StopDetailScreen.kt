@@ -4,10 +4,12 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -21,14 +23,12 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -49,6 +49,8 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import dev.dublinbustracker.app.bus.BusInfoSheet
 import dev.dublinbustracker.app.favourites.FavouriteStarButton
+import dev.dublinbustracker.app.ui.AppRow
+import dev.dublinbustracker.app.ui.ScreenHeader
 import dev.dublinbustracker.core.Arrival
 import dev.dublinbustracker.core.Stop
 import dev.dublinbustracker.core.display
@@ -84,20 +86,15 @@ fun StopDetailScreen(
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp)) {
-        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(stop.name, style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+    Column(modifier = Modifier.fillMaxSize()) {
+        ScreenHeader(
+            title = stop.name,
+            subtitle = if (autoRefresh) "Stop ${stop.code}" else "Stop ${stop.code} · auto-refresh paused",
+            onBack = onBack,
+        ) {
             FavouriteStarButton(
                 isFavourite = stop.id in favouriteIds,
                 onToggle = { favouritesRepository.toggle(stop) },
-            )
-            TextButton(onClick = onBack) { Text("Back") }
-        }
-
-        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                if (autoRefresh) "Stop ${stop.code}" else "Stop ${stop.code} · auto-refresh paused",
-                modifier = Modifier.weight(1f),
             )
             IconButton(onClick = { autoRefresh = !autoRefresh }) {
                 Icon(
@@ -111,7 +108,7 @@ fun StopDetailScreen(
 
         if (stop.routes.isNotEmpty()) {
             Row(
-                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 FilterChip(
@@ -146,16 +143,15 @@ fun StopDetailScreen(
                 }
             },
         ) {
-            LazyColumn(state = listState, modifier = Modifier.fillMaxSize().padding(top = 8.dp)) {
+            LazyColumn(state = listState, modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 16.dp)) {
                 when (val state = uiState) {
-                    is ArrivalsUiState.Loading -> item { CircularProgressIndicator(modifier = Modifier.padding(top = 8.dp)) }
-                    is ArrivalsUiState.Error -> item { Text(state.message, color = MaterialTheme.colorScheme.error) }
+                    is ArrivalsUiState.Loading -> item { CircularProgressIndicator(modifier = Modifier.padding(16.dp)) }
+                    is ArrivalsUiState.Error -> item { Text(state.message, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(16.dp)) }
                     is ArrivalsUiState.Loaded -> if (state.arrivals.isEmpty()) {
-                        item { Text("No upcoming arrivals", modifier = Modifier.padding(top = 8.dp)) }
+                        item { Text("No upcoming arrivals", modifier = Modifier.padding(16.dp)) }
                     } else {
                         items(state.arrivals) { arrival ->
                             ArrivalRow(arrival, onClick = { infoArrival = arrival }, onViewMap = { onViewRoute(arrival) })
-                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                         }
                     }
                 }
@@ -179,15 +175,8 @@ fun StopDetailScreen(
 @Composable
 private fun ArrivalRow(arrival: Arrival, onClick: () -> Unit, onViewMap: () -> Unit) {
     val shown = arrival.display(System.currentTimeMillis() / 1000, ZoneId.systemDefault())
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            // Greyed when the bus may already have gone.
-            .alpha(if (shown.muted) 0.5f else 1f)
-            .padding(vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
+    // Greyed when the bus may already have gone.
+    AppRow(onClick = onClick, modifier = Modifier.alpha(if (shown.muted) 0.5f else 1f)) {
         Text(
             shown.headline,
             style = MaterialTheme.typography.bodyLarge,
@@ -207,7 +196,7 @@ private fun ArrivalRow(arrival: Arrival, onClick: () -> Unit, onViewMap: () -> U
             }
         }
         // A shortcut straight to the map; tapping the row itself opens the bus's details.
-        IconButton(onClick = onViewMap) {
+        IconButton(onClick = onViewMap, modifier = Modifier.size(40.dp)) {
             Icon(Icons.Filled.Map, contentDescription = "View route on map", tint = MaterialTheme.colorScheme.primary)
         }
     }
