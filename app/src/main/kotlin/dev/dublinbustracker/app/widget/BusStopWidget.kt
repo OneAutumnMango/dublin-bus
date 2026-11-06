@@ -2,6 +2,12 @@ package dev.dublinbustracker.app.widget
 
 import android.content.Context
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -16,6 +22,9 @@ import androidx.glance.appwidget.action.ActionCallback
 import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.appwidget.cornerRadius
 import androidx.glance.appwidget.provideContent
+import androidx.glance.appwidget.state.updateAppWidgetState
+import androidx.glance.currentState
+import androidx.glance.state.PreferencesGlanceStateDefinition
 import androidx.glance.background
 import androidx.glance.color.ColorProvider
 import androidx.glance.layout.Column
@@ -43,6 +52,7 @@ private const val SHOWN_ARRIVALS = 4
 
 /** What the widget has to say right now. */
 sealed interface WidgetView {
+    data object Loading : WidgetView
     data object NotConfigured : WidgetView
     data object Unreachable : WidgetView
     data object NoFavourites : WidgetView
@@ -50,15 +60,42 @@ sealed interface WidgetView {
     data class Arrivals(val title: String, val subtitle: String?, val arrivals: List<Arrival>) : WidgetView
 }
 
+private val REFRESHED_AT = longPreferencesKey("refreshed_at")
+
 class BusStopWidget : GlanceAppWidget() {
+    override val stateDefinition = PreferencesGlanceStateDefinition
+
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val appWidgetId = runCatching { GlanceAppWidgetManager(context).getAppWidgetId(id) }.getOrNull()
-        val config = appWidgetId?.let { WidgetConfigStore(context).load(it) }
-        val container = (context.applicationContext as? BusTrackerApp)?.container
-        val view = if (config == null || container == null) WidgetView.NotConfigured else resolve(context, container, config)
-
-        provideContent { WidgetContent(view) }
+        provideContent {
+            // Glance keeps a widget's composition alive for a while, and an update during that time only recomposes it:
+            // it doesn't run provideGlance again. So the data is fetched in here, keyed on a value every refresh changes,
+            // and a refresh (or a just-finished setup) always fetches again.
+            val refreshedAt = currentState(REFRESHED_AT)
+            var view by remember { mutableStateOf<WidgetView>(WidgetView.Loading) }
+            LaunchedEffect(refreshedAt) { view = load(context, appWidgetId) }
+            WidgetContent(view)
+        }
     }
+}
+
+/** Fetches this widget's data again and redraws it, whether or not it is currently being shown. */
+suspend fun BusStopWidget.refresh(context: Context, glanceId: GlanceId) {
+    updateAppWidgetState(context, glanceId) { it[REFRESHED_AT] = System.currentTimeMillis() }
+    update(context, glanceId)
+}
+
+/** Refreshes every widget placed on the home screen; returns how many there are. */
+suspend fun refreshAllWidgets(context: Context): Int {
+    val ids = GlanceAppWidgetManager(context).getGlanceIds(BusStopWidget::class.java)
+    ids.forEach { BusStopWidget().refresh(context, it) }
+    return ids.size
+}
+
+private suspend fun load(context: Context, appWidgetId: Int?): WidgetView {
+    val config = appWidgetId?.let { WidgetConfigStore(context).load(it) }
+    val container = (context.applicationContext as? BusTrackerApp)?.container
+    return if (config == null || container == null) WidgetView.NotConfigured else resolve(context, container, config)
 }
 
 private suspend fun resolve(context: Context, container: AppContainer, config: WidgetConfig): WidgetView {
@@ -91,6 +128,7 @@ private fun WidgetContent(view: WidgetView) {
             .clickable(actionStartActivity<MainActivity>()),
     ) {
         when (view) {
+            is WidgetView.Loading -> Message("Loading...")
             is WidgetView.NotConfigured -> Message("Tap to open the app, then remove and re-add this widget to set it up.")
             is WidgetView.Unreachable -> Message("Can't reach the server - check the address in Settings.")
             is WidgetView.NoFavourites -> Message("No favourite stops to choose from. Star a stop in the app, or exclude fewer.")
@@ -132,6 +170,6 @@ private fun dueText(arrival: Arrival) = if (arrival.dueMinutes <= 0) "Due" else 
 
 class RefreshWidgetAction : ActionCallback {
     override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
-        BusStopWidget().update(context, glanceId)
+        BusStopWidget().refresh(context, glanceId)
     }
 }

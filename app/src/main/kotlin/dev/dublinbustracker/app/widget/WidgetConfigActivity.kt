@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
-import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.lifecycle.lifecycleScope
 import dev.dublinbustracker.app.BusTrackerApp
 import dev.dublinbustracker.app.ui.BusTrackerTheme
@@ -44,10 +43,9 @@ class WidgetConfigActivity : ComponentActivity() {
     private fun onConfigured(config: WidgetConfig) {
         WidgetConfigStore(this).save(appWidgetId, config)
         lifecycleScope.launch {
-            runCatching {
-                val glanceId = GlanceAppWidgetManager(this@WidgetConfigActivity).getGlanceIdBy(appWidgetId)
-                BusStopWidget().update(this@WidgetConfigActivity, glanceId)
-            }
+            // The widget may already have drawn itself once, before it was set up, so make it fetch again.
+            runCatching { refreshAllWidgets(this@WidgetConfigActivity) }
+            WidgetRefresh.ensureScheduled(this@WidgetConfigActivity)
             setResult(RESULT_OK, Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId))
             finish()
         }
