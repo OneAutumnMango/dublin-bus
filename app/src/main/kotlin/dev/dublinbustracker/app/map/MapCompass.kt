@@ -26,10 +26,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.unit.dp
+import dev.dublinbustracker.core.OkabeIto
 import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.maps.MapLibreMap
 
-private val NORTH_RED = Color(0xFFD32F2F)
+private val NORTH_RED = Color(OkabeIto.VERMILLION)
 private val SOUTH_GREY = Color(0xFF9E9E9E)
 private val LOCK_GREY = Color(0xFFBDBDBD)
 

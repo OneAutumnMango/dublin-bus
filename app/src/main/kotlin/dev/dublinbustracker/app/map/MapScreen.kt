@@ -12,6 +12,7 @@ import androidx.compose.material.icons.filled.Route
 import androidx.compose.material3.FilledTonalIconToggleButton
 import dev.dublinbustracker.app.bus.BusInfoSheet
 import dev.dublinbustracker.app.location.requestCurrentLocation
+import dev.dublinbustracker.core.OkabeIto
 import dev.dublinbustracker.core.toHexColour
 import dev.dublinbustracker.core.trackingColour
 import dev.dublinbustracker.core.trackingTextColour
@@ -83,7 +84,7 @@ private val DUBLIN_CITY_CENTRE = LatLng(53.3498, -6.2603)
 private const val DEFAULT_ZOOM = 14.0
 private const val MY_LOCATION_ZOOM = 16.0
 
-private const val BUS_ORANGE = 0xFFEF6C00.toInt()
+private const val BUS_ORANGE = OkabeIto.ORANGE
 
 private const val STOPS_SOURCE = "stops"
 private const val CLUSTER_LAYER = "stop-clusters"
@@ -183,7 +184,7 @@ fun MapScreen(apiClient: TransitApiClient, onStopSelected: (Stop) -> Unit) {
                 textField(Expression.get("label")),
                 textFont(MAP_BOLD_FONT),
                 textSize(11f),
-                textColor(android.graphics.Color.WHITE),
+                textColor(android.graphics.Color.BLACK),
                 textAllowOverlap(true),
             ),
         )
@@ -250,7 +251,7 @@ fun MapScreen(apiClient: TransitApiClient, onStopSelected: (Stop) -> Unit) {
                     bus.position.lon,
                     "label" to bus.routeShortName,
                     "color" to trackingColour(route.colourIndex, bus.directionId).toHexColour(),
-                    "textColor" to trackingTextColour(bus.directionId).toHexColour(),
+                    "textColor" to trackingTextColour(route.colourIndex, bus.directionId).toHexColour(),
                     "tripId" to bus.tripId,
                 )
             }
@@ -379,7 +380,7 @@ fun MapScreen(apiClient: TransitApiClient, onStopSelected: (Stop) -> Unit) {
                 CircularProgressIndicator(modifier = Modifier.align(Alignment.TopStart).padding(16.dp))
             }
 
-            MapCompass(handle, modifier = Modifier.align(Alignment.TopEnd).padding(12.dp))
+            MapCompass(handle, modifier = Modifier.align(Alignment.TopEnd).padding(16.dp))
 
             FloatingActionButton(
                 onClick = {

@@ -41,12 +41,16 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import dev.dublinbustracker.app.bus.BusInfoSheet
 import dev.dublinbustracker.app.map.MAP_BLUE
 import dev.dublinbustracker.app.map.MapCompass
+import dev.dublinbustracker.app.ui.ScreenHeader
 import dev.dublinbustracker.app.map.MAP_BOLD_FONT
 import dev.dublinbustracker.app.map.collectionOf
 import dev.dublinbustracker.app.map.featureAt
 import dev.dublinbustracker.app.map.rememberMapHandle
 import dev.dublinbustracker.core.Arrival
+import dev.dublinbustracker.core.OkabeIto
+import dev.dublinbustracker.core.readableTextOn
 import dev.dublinbustracker.core.Stop
+import dev.dublinbustracker.core.toHexColour
 import dev.dublinbustracker.data.TransitApiClient
 import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
@@ -81,11 +85,11 @@ import org.maplibre.geojson.Feature
 import org.maplibre.geojson.LineString
 import org.maplibre.geojson.Point
 
-private const val THIS_STOP_COLOR = 0xFFD32F2F.toInt()
-private const val YOUR_BUS_COLOR = 0xFF2E7D32.toInt()
-private const val OTHER_BUS_COLOR = 0xFFEF6C00.toInt()
+private const val THIS_STOP_COLOR = OkabeIto.VERMILLION
+private const val YOUR_BUS_COLOR = OkabeIto.BLUISH_GREEN
+private const val OTHER_BUS_COLOR = OkabeIto.ORANGE
 private const val FIT_PADDING_PX = 80
-private const val ARROW_COLOR = 0xFF0D47A1.toInt()
+private const val ARROW_COLOR = OkabeIto.BLUE
 
 private const val ARROW_IMAGE = "route-arrow"
 private const val LINE_SOURCE = "route-line"
@@ -172,7 +176,7 @@ fun RouteMapScreen(stop: Stop, arrival: Arrival, apiClient: TransitApiClient, on
         style.addLayer(
             SymbolLayer("route-bus-labels", BUSES_SOURCE).withProperties(
                 textField(Expression.get("label")), textFont(MAP_BOLD_FONT), textSize(11f),
-                textColor(android.graphics.Color.WHITE), textAllowOverlap(true),
+                textColor(Expression.toColor(Expression.get("textColor"))), textAllowOverlap(true),
             ),
         )
         style.addLayer(
@@ -220,6 +224,7 @@ fun RouteMapScreen(stop: Stop, arrival: Arrival, apiClient: TransitApiClient, on
                         vehicle.position.lon,
                         "label" to vehicle.routeShortName,
                         "yours" to yours,
+                        "textColor" to readableTextOn(if (yours) YOUR_BUS_COLOR else OTHER_BUS_COLOR).toHexColour(),
                         "tripId" to vehicle.tripId,
                         "title" to "${vehicle.routeShortName} to ${vehicle.headsign}" + if (yours) " (your bus)" else "",
                     )
@@ -248,17 +253,11 @@ fun RouteMapScreen(stop: Stop, arrival: Arrival, apiClient: TransitApiClient, on
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text("${arrival.routeShortName} to ${arrival.destination}", style = MaterialTheme.typography.titleMedium)
-                Text("Viewing ${stop.name} (${stop.code})", style = MaterialTheme.typography.bodySmall)
-            }
-            TextButton(onClick = onBack) { Text("Back") }
-        }
+        ScreenHeader(
+            title = "${arrival.routeShortName} to ${arrival.destination}",
+            subtitle = "Viewing ${stop.name} (${stop.code})",
+            onBack = onBack,
+        )
         Legend(busCount = state.vehicles.size, showStops = showStops, onShowStops = { showStops = it })
 
         state.error?.let {
@@ -270,7 +269,7 @@ fun RouteMapScreen(stop: Stop, arrival: Arrival, apiClient: TransitApiClient, on
             if (state.data == null && state.error == null) {
                 CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
             }
-            MapCompass(handle, modifier = Modifier.align(Alignment.TopEnd).padding(12.dp))
+            MapCompass(handle, modifier = Modifier.align(Alignment.TopEnd).padding(16.dp))
             tappedLabel?.let {
                 Surface(
                     modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp),
@@ -298,7 +297,7 @@ fun RouteMapScreen(stop: Stop, arrival: Arrival, apiClient: TransitApiClient, on
 @Composable
 private fun Legend(busCount: Int, showStops: Boolean, onShowStops: (Boolean) -> Unit) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

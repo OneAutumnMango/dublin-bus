@@ -10,6 +10,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import dev.dublinbustracker.core.OkabeIto
 import org.maplibre.android.MapLibre
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.MapView
@@ -27,7 +28,7 @@ const val MAP_STYLE_URL = "https://tiles.openfreemap.org/styles/positron"
 /** The label font OpenFreeMap serves glyphs for; a font it lacks renders no text at all. */
 val MAP_BOLD_FONT = arrayOf("Noto Sans Bold")
 
-const val MAP_BLUE = 0xFF1565C0.toInt()
+const val MAP_BLUE = OkabeIto.BLUE
 
 /** Owns a [MapView] and exposes the map and its loaded style, so a screen can add its own layers. */
 class MapHandle(val view: MapView) {

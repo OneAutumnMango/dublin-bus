@@ -1,15 +1,30 @@
 package dev.dublinbustracker.core
 
-/** Distinct hues for tracked routes; white text stays readable on every one. */
+/**
+ * The Okabe-Ito palette: eight colours chosen to stay distinguishable for the common kinds of colour
+ * blindness (and everyone else). Used for every colour on the maps that carries meaning.
+ */
+object OkabeIto {
+    const val ORANGE = 0xFFE69F00.toInt()
+    const val SKY_BLUE = 0xFF56B4E9.toInt()
+    const val BLUISH_GREEN = 0xFF009E73.toInt()
+    const val YELLOW = 0xFFF0E442.toInt()
+    const val BLUE = 0xFF0072B2.toInt()
+    const val VERMILLION = 0xFFD55E00.toInt()
+    const val REDDISH_PURPLE = 0xFFCC79A7.toInt()
+    const val BLACK = 0xFF000000.toInt()
+}
+
+/** Route colours, in the order they are handed out: the first few are the most distinct from one another. */
 private val ROUTE_COLOURS = intArrayOf(
-    0xFFD81B60.toInt(), // pink
-    0xFF1E88E5.toInt(), // blue
-    0xFF43A047.toInt(), // green
-    0xFFFB8C00.toInt(), // orange
-    0xFF8E24AA.toInt(), // purple
-    0xFF00897B.toInt(), // teal
-    0xFF6D4C41.toInt(), // brown
-    0xFF546E7A.toInt(), // slate
+    OkabeIto.BLUE,
+    OkabeIto.VERMILLION,
+    OkabeIto.BLUISH_GREEN,
+    OkabeIto.ORANGE,
+    OkabeIto.REDDISH_PURPLE,
+    OkabeIto.SKY_BLUE,
+    OkabeIto.BLACK,
+    OkabeIto.YELLOW,
 )
 
 val MAX_TRACKED_ROUTES = ROUTE_COLOURS.size
@@ -23,8 +38,20 @@ fun trackingColour(colourIndex: Int, directionId: String): Int {
     return if (directionId == "0") base else lighten(base, 0.5f)
 }
 
-/** Dark text on the light direction, white on the full one. */
-fun trackingTextColour(directionId: String): Int = if (directionId == "0") 0xFFFFFFFF.toInt() else 0xFF212121.toInt()
+/** Black or white text, whichever is easier to read on a [fill] colour (yellow needs black, blue needs white). */
+fun readableTextOn(fill: Int): Int {
+    fun channel(shift: Int): Double {
+        val c = ((fill shr shift) and 0xFF) / 255.0
+        return if (c <= 0.03928) c / 12.92 else Math.pow((c + 0.055) / 1.055, 2.4)
+    }
+    val luminance = 0.2126 * channel(16) + 0.7152 * channel(8) + 0.0722 * channel(0)
+    val contrastWithWhite = 1.05 / (luminance + 0.05)
+    val contrastWithBlack = (luminance + 0.05) / 0.05
+    return if (contrastWithWhite >= contrastWithBlack) 0xFFFFFFFF.toInt() else 0xFF000000.toInt()
+}
+
+/** The label colour for a bus drawn in [trackingColour]. */
+fun trackingTextColour(colourIndex: Int, directionId: String): Int = readableTextOn(trackingColour(colourIndex, directionId))
 
 fun Int.toHexColour(): String = "#%06X".format(this and 0xFFFFFF)
 

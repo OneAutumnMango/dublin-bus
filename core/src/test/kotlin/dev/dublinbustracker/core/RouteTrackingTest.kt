@@ -24,14 +24,43 @@ class RouteTrackingTest {
     }
 
     @Test
-    fun `the light direction gets dark text and the full one white`() {
-        assertEquals(0xFFFFFFFF.toInt(), trackingTextColour("0"))
-        assertEquals(0xFF212121.toInt(), trackingTextColour("1"))
+    fun `route colours are the Okabe-Ito palette`() {
+        val okabeIto = setOf(
+            OkabeIto.ORANGE, OkabeIto.SKY_BLUE, OkabeIto.BLUISH_GREEN, OkabeIto.YELLOW,
+            OkabeIto.BLUE, OkabeIto.VERMILLION, OkabeIto.REDDISH_PURPLE, OkabeIto.BLACK,
+        )
+
+        assertEquals(okabeIto, (0 until MAX_TRACKED_ROUTES).map { trackingColour(it, "0") }.toSet())
+    }
+
+    @Test
+    fun `the first two routes are the most distinct pair`() {
+        assertEquals(OkabeIto.BLUE, trackingColour(0, "0"))
+        assertEquals(OkabeIto.VERMILLION, trackingColour(1, "0"))
+    }
+
+    @Test
+    fun `labels are black on light colours and white on dark ones`() {
+        assertEquals(0xFF000000.toInt(), readableTextOn(OkabeIto.YELLOW))
+        assertEquals(0xFF000000.toInt(), readableTextOn(OkabeIto.SKY_BLUE))
+        assertEquals(0xFFFFFFFF.toInt(), readableTextOn(OkabeIto.BLUE))
+        assertEquals(0xFFFFFFFF.toInt(), readableTextOn(OkabeIto.BLACK))
+    }
+
+    @Test
+    fun `every route colour and its lighter direction has readable label text`() {
+        val white = 0xFFFFFFFF.toInt()
+        val black = 0xFF000000.toInt()
+        (0 until MAX_TRACKED_ROUTES).forEach { index ->
+            listOf("0", "1").forEach { direction ->
+                assertTrue(trackingTextColour(index, direction) in listOf(white, black))
+            }
+        }
     }
 
     @Test
     fun `colours format as hex for the map`() {
-        assertEquals("#1E88E5", trackingColour(1, "0").toHexColour())
+        assertEquals("#D55E00", trackingColour(1, "0").toHexColour())
     }
 
     @Test
