@@ -5,7 +5,9 @@ import androidx.lifecycle.viewModelScope
 import dev.dublinbustracker.core.Stop
 import dev.dublinbustracker.data.TransitApiClient
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -40,7 +42,10 @@ class SearchViewModel(private val apiClient: TransitApiClient) : ViewModel() {
             // Let typing settle so each keystroke doesn't become a request.
             delay(DEBOUNCE_MS)
             _uiState.value = SearchUiState.Searching
-            _uiState.value = runCatching { apiClient.searchStops(newQuery) }.fold(
+            val result = runCatching { apiClient.searchStops(newQuery) }
+            // runCatching also catches the cancellation of a search superseded by typing or clearing the box.
+            currentCoroutineContext().ensureActive()
+            _uiState.value = result.fold(
                 onSuccess = { SearchUiState.Loaded(it) },
                 onFailure = { SearchUiState.Error(it.message ?: "Search failed") },
             )
