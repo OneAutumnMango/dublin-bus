@@ -2,6 +2,7 @@ package dev.dublinbustracker.app
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -81,6 +82,16 @@ private fun AppRoot(container: AppContainer) {
 
     val stop = selectedStop
     val mapArrival = routeMapArrival
+
+    // Back steps out one level at a time: map -> stop -> tab, and from another tab to Search, before the app closes.
+    BackHandler(enabled = choosingMapArea || stop != null || tab != AppTab.SEARCH) {
+        when {
+            choosingMapArea -> choosingMapArea = false
+            mapArrival != null -> routeMapArrival = null
+            stop != null -> selectedStop = null
+            else -> tab = AppTab.SEARCH
+        }
+    }
     when {
         choosingMapArea -> ChooseAreaScreen(onBack = { choosingMapArea = false })
         stop != null && mapArrival != null -> RouteMapScreen(
