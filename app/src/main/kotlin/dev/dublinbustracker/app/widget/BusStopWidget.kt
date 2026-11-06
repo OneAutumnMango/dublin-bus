@@ -11,8 +11,11 @@ import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.glance.ColorFilter
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
+import androidx.glance.Image
+import androidx.glance.ImageProvider
 import androidx.glance.action.ActionParameters
 import androidx.glance.action.actionStartActivity
 import androidx.glance.action.clickable
@@ -34,6 +37,7 @@ import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.height
 import androidx.glance.layout.padding
+import androidx.glance.layout.size
 import androidx.glance.layout.width
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
@@ -41,6 +45,7 @@ import androidx.glance.text.TextStyle
 import dev.dublinbustracker.app.AppContainer
 import dev.dublinbustracker.app.BusTrackerApp
 import dev.dublinbustracker.app.MainActivity
+import dev.dublinbustracker.app.R
 import dev.dublinbustracker.app.location.lastKnownFix
 import dev.dublinbustracker.core.Arrival
 import dev.dublinbustracker.core.distanceText
@@ -140,10 +145,11 @@ private fun WidgetContent(view: WidgetView) {
                         Text(view.title, maxLines = 1, style = TextStyle(color = TEXT, fontSize = 15.sp, fontWeight = FontWeight.Bold))
                         view.subtitle?.let { Text(it, maxLines = 1, style = TextStyle(color = MUTED, fontSize = 11.sp)) }
                     }
-                    Text(
-                        "Refresh",
-                        style = TextStyle(color = MUTED, fontSize = 11.sp),
-                        modifier = GlanceModifier.clickable(actionRunCallback<RefreshWidgetAction>()),
+                    Image(
+                        provider = ImageProvider(R.drawable.ic_refresh),
+                        contentDescription = "Refresh",
+                        colorFilter = ColorFilter.tint(MUTED),
+                        modifier = GlanceModifier.size(30.dp).padding(3.dp).clickable(actionRunCallback<RefreshWidgetAction>()),
                     )
                 }
                 // A Spacer with no height of its own stretches to fill the widget and pushes everything below it out of view.
