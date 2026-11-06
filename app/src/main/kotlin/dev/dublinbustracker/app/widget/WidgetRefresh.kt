@@ -15,17 +15,26 @@ import java.util.concurrent.TimeUnit
  * once a minute, and Android won't wake the app more often than this cheaply, so two minutes is the balance.
  */
 private const val REFRESH_MINUTES = 2L
-private const val WORK_NAME = "widget-refresh"
+private const val WORK_NAME = "widget-poll"
+
+/** Earlier versions kept a 30-minute periodic job under this name; left alone it would shadow the new polling. */
+private const val LEGACY_WORK_NAME = "widget-refresh"
 
 object WidgetRefresh {
     /** Makes sure a refresh is queued, without disturbing one that already is. */
-    fun ensureScheduled(context: Context) = enqueue(context, ExistingWorkPolicy.KEEP)
+    fun ensureScheduled(context: Context) {
+        WorkManager.getInstance(context).cancelUniqueWork(LEGACY_WORK_NAME)
+        enqueue(context, ExistingWorkPolicy.KEEP)
+    }
 
     internal fun scheduleNext(context: Context) = enqueue(context, ExistingWorkPolicy.REPLACE)
 
     /** Stops the polling: there are no widgets left to keep fresh. */
     fun cancel(context: Context) {
-        WorkManager.getInstance(context).cancelUniqueWork(WORK_NAME)
+        WorkManager.getInstance(context).run {
+            cancelUniqueWork(WORK_NAME)
+            cancelUniqueWork(LEGACY_WORK_NAME)
+        }
     }
 
     private fun enqueue(context: Context, policy: ExistingWorkPolicy) {
