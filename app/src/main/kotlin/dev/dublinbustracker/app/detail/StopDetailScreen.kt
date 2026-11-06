@@ -37,6 +37,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -171,26 +172,34 @@ fun StopDetailScreen(
     }
 }
 
-/** One compact line-pair per bus: the time it's due in large type, then where it's going and how late. */
+/** One row per bus, left to right: its number, where it's going, then when it's due with how late or early it is beneath. */
 @Composable
 private fun ArrivalRow(arrival: Arrival, onClick: () -> Unit, onViewMap: () -> Unit) {
     val shown = arrival.display(System.currentTimeMillis() / 1000, ZoneId.systemDefault())
     // Greyed when the bus may already have gone.
     AppRow(onClick = onClick, modifier = Modifier.alpha(if (shown.muted) 0.5f else 1f)) {
         Text(
-            shown.headline,
-            style = MaterialTheme.typography.bodyLarge,
+            shown.route,
+            style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
-            modifier = Modifier.width(ARRIVAL_HEADLINE_WIDTH),
+            modifier = Modifier.width(ARRIVAL_ROUTE_WIDTH),
         )
-        Column(modifier = Modifier.weight(1f)) {
-            Text(shown.destinationLine, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(
+            shown.destination,
+            style = MaterialTheme.typography.bodyMedium,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        Column(horizontalAlignment = Alignment.End, modifier = Modifier.width(ARRIVAL_TIME_WIDTH).padding(start = 8.dp)) {
+            Text(shown.headline, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
             if (shown.detailLine.isNotEmpty()) {
                 Text(
                     shown.detailLine,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
+                    textAlign = TextAlign.End,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
@@ -202,4 +211,5 @@ private fun ArrivalRow(arrival: Arrival, onClick: () -> Unit, onViewMap: () -> U
     }
 }
 
-private val ARRIVAL_HEADLINE_WIDTH = 80.dp
+private val ARRIVAL_ROUTE_WIDTH = 56.dp
+private val ARRIVAL_TIME_WIDTH = 104.dp

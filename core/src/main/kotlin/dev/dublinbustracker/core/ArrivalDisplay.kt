@@ -5,12 +5,13 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 /**
- * What one arrival row says. The headline is when the bus is due (the timetable time for a
- * scheduled one); where it's going and how late it is sit below in smaller print.
+ * What one arrival row says, left to right: the bus number, where it's going, then when it's due
+ * (the timetable time for a scheduled one) with how late or early it is beneath.
  */
 data class ArrivalDisplay(
+    val route: String,
+    val destination: String,
     val headline: String,
-    val destinationLine: String,
     val detailLine: String,
     /** Greyed out: the bus may already have gone. */
     val muted: Boolean,
@@ -35,7 +36,8 @@ fun Arrival.display(nowEpochSeconds: Long, zone: ZoneId): ArrivalDisplay {
             dueMinutes <= 0 -> "Due"
             else -> minutesText(dueMinutes)
         },
-        destinationLine = "$routeShortName · $destination",
+        route = routeShortName,
+        destination = destination,
         detailLine = details.joinToString(" · "),
         muted = possiblyPassed,
     )

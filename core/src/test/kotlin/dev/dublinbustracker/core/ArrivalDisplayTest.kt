@@ -23,7 +23,8 @@ class ArrivalDisplayTest {
         val shown = arrival(dueMinutes = 17, delaySeconds = 150).display(now, zone)
 
         assertEquals("17 min", shown.headline)
-        assertEquals("4 · Heuston Station", shown.destinationLine)
+        assertEquals("4", shown.route)
+        assertEquals("Heuston Station", shown.destination)
         assertEquals("2 min late", shown.detailLine)
         assertFalse(shown.muted)
     }
