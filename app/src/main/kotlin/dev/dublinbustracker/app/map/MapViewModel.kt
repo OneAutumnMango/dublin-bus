@@ -13,6 +13,9 @@ import dev.dublinbustracker.core.VehiclePosition
 import dev.dublinbustracker.data.TransitApiClient
 import dev.dublinbustracker.data.TransitApiException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.delay
@@ -134,12 +137,16 @@ class MapViewModel(private val apiClient: TransitApiClient) : ViewModel() {
                 runCatching { apiClient.vehiclesForRoute(name) }.fold(
                     onSuccess = { vehicles ->
                         // A route's path is a nicety: if it can't be fetched the buses still show.
-                        val shapes = listOf("0", "1").mapNotNull { direction ->
-                            runCatching { apiClient.routeShape(name, direction) }.getOrNull()?.let { direction to it }
-                        }.toMap()
-                        val stops = listOf("0", "1").mapNotNull { direction ->
-                            runCatching { apiClient.routeStops(name, direction) }.getOrNull()?.let { direction to it }
-                        }.toMap()
+                        val directions = listOf("0", "1")
+                        val (shapes, stops) = coroutineScope {
+                            val shapeCalls = directions.map { direction ->
+                                async { runCatching { apiClient.routeShape(name, direction) }.getOrNull()?.let { direction to it } }
+                            }
+                            val stopCalls = directions.map { direction ->
+                                async { runCatching { apiClient.routeStops(name, direction) }.getOrNull()?.let { direction to it } }
+                            }
+                            shapeCalls.awaitAll().filterNotNull().toMap() to stopCalls.awaitAll().filterNotNull().toMap()
+                        }
                         _tracking.update { state ->
                             state.copy(
                                 routes = state.routes + TrackedRoute(name, nextColourIndex(state.routes.map { it.colourIndex })),
