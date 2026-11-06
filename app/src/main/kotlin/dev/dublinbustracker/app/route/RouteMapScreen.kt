@@ -41,6 +41,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import dev.dublinbustracker.app.bus.BusInfoSheet
 import dev.dublinbustracker.app.map.MAP_BLUE
 import dev.dublinbustracker.app.map.MapCompass
+import dev.dublinbustracker.app.ui.PollWhileVisible
 import dev.dublinbustracker.app.ui.ScreenHeader
 import dev.dublinbustracker.app.map.MAP_BOLD_FONT
 import dev.dublinbustracker.app.map.collectionOf
@@ -120,6 +121,7 @@ fun RouteMapScreen(stop: Stop, arrival: Arrival, apiClient: TransitApiClient, on
         factory = viewModelFactory { initializer { RouteMapViewModel(arrival.tripId, apiClient) } },
     )
     val state by viewModel.uiState.collectAsState()
+    PollWhileVisible(VEHICLE_REFRESH_INTERVAL_MS, viewModel::refreshVehicles)
     val handle = rememberMapHandle()
     var tappedLabel by remember { mutableStateOf<String?>(null) }
     var infoTripId by remember { mutableStateOf<String?>(null) }

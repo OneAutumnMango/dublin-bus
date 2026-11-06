@@ -12,6 +12,7 @@ import androidx.compose.material.icons.filled.Route
 import androidx.compose.material3.FilledTonalIconToggleButton
 import dev.dublinbustracker.app.bus.BusInfoSheet
 import dev.dublinbustracker.app.location.requestCurrentLocation
+import dev.dublinbustracker.app.ui.PollWhileVisible
 import dev.dublinbustracker.core.OkabeIto
 import dev.dublinbustracker.core.toHexColour
 import dev.dublinbustracker.core.trackingColour
@@ -110,6 +111,7 @@ fun MapScreen(apiClient: TransitApiClient, onStopSelected: (Stop) -> Unit) {
     val showBuses by viewModel.showBuses.collectAsState()
     val tracking by viewModel.tracking.collectAsState()
     val suggestions by viewModel.suggestions.collectAsState()
+    PollWhileVisible(BUS_REFRESH_MS, viewModel::poll)
     val context = LocalContext.current
     val handle = rememberMapHandle()
     val latestStops by rememberUpdatedState(state.stops)

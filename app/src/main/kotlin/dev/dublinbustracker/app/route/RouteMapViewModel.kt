@@ -9,7 +9,6 @@ import dev.dublinbustracker.core.VehiclePosition
 import dev.dublinbustracker.data.TransitApiClient
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -51,16 +50,16 @@ class RouteMapViewModel(
                 }
             }.onSuccess { (data, vehicles) ->
                 _uiState.value = RouteMapUiState(data = data, vehicles = vehicles)
-                pollVehicles(data.trip)
             }.onFailure {
                 _uiState.value = RouteMapUiState(error = it.message ?: "Failed to load the route")
             }
         }
     }
 
-    private suspend fun pollVehicles(trip: TripInfo) {
-        while (true) {
-            delay(VEHICLE_REFRESH_INTERVAL_MS)
+    /** One refresh of the buses on this trip's route; the screen calls it on a timer while it is showing. */
+    fun refreshVehicles() {
+        val trip = _uiState.value.data?.trip ?: return
+        viewModelScope.launch {
             // A failed refresh just keeps the last positions on screen rather than blanking the map.
             runCatching { apiClient.vehiclesForRoute(trip.routeId, trip.directionId) }
                 .onSuccess { vehicles -> _uiState.value = _uiState.value.copy(vehicles = vehicles) }

@@ -60,7 +60,7 @@ data class TrackingUiState(
 }
 
 /** The server takes in new positions about once a minute; asking this often keeps the map within a few seconds of it. */
-private const val BUS_REFRESH_MS = 15_000L
+const val BUS_REFRESH_MS = 15_000L
 private const val SUGGEST_DEBOUNCE_MS = 250L
 private const val PAN_DEBOUNCE_MS = 400L
 private const val MAX_RADIUS_METERS = 5_000
@@ -77,7 +77,6 @@ class MapViewModel(private val apiClient: TransitApiClient) : ViewModel() {
 
     private val _tracking = MutableStateFlow(TrackingUiState())
     val tracking: StateFlow<TrackingUiState> = _tracking.asStateFlow()
-    private var trackingJob: Job? = null
 
     private val _suggestions = MutableStateFlow<List<Route>>(emptyList())
     /** Routes matching what's been typed in the add-a-route box. */
@@ -107,17 +106,17 @@ class MapViewModel(private val apiClient: TransitApiClient) : ViewModel() {
         _tracking.update { it.copy(hidden = if (key in it.hidden) it.hidden - key else it.hidden + key) }
     }
 
-    /** Turns route-following mode on or off. While on, the followed routes' buses refresh every 30s. */
+    /** Turns route-following mode on or off. While on, the screen calls [poll] to keep the followed buses fresh. */
     fun setTracking(on: Boolean) {
         _tracking.update { it.copy(enabled = on, message = null) }
-        trackingJob?.cancel()
-        if (on) {
-            trackingJob = viewModelScope.launch {
-                while (true) {
-                    if (_tracking.value.routes.isNotEmpty()) refreshTrackedBuses()
-                    delay(BUS_REFRESH_MS)
-                }
-            }
+        if (on && _tracking.value.routes.isNotEmpty()) viewModelScope.launch { refreshTrackedBuses() }
+    }
+
+    /** One refresh of whatever is live on the map; the screen calls it on a timer while it is showing. */
+    fun poll() {
+        viewModelScope.launch {
+            if (_tracking.value.enabled && _tracking.value.routes.isNotEmpty()) refreshTrackedBuses()
+            if (_showBuses.value) lastViewport?.let { refreshVehicles(it) }
         }
     }
 
@@ -191,22 +190,12 @@ class MapViewModel(private val apiClient: TransitApiClient) : ViewModel() {
         }
     }
 
-    private var busRefreshJob: Job? = null
-
     fun toggleBuses() {
         _showBuses.value = !_showBuses.value
-        busRefreshJob?.cancel()
         if (!_showBuses.value) {
             _uiState.value = _uiState.value.copy(vehicles = emptyList())
         } else {
             lastViewport?.let { viewport -> viewModelScope.launch { load(viewport) } }
-            // Keep the buses moving without the user having to pan or re-toggle.
-            busRefreshJob = viewModelScope.launch {
-                while (true) {
-                    delay(BUS_REFRESH_MS)
-                    lastViewport?.let { viewport -> refreshVehicles(viewport) }
-                }
-            }
         }
     }
 
