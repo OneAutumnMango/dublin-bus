@@ -6,6 +6,9 @@ import dev.dublinbustracker.core.Arrival
 import dev.dublinbustracker.core.Stop
 import dev.dublinbustracker.data.TransitApiClient
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -38,8 +41,9 @@ class StopDetailViewModel(
     private val _uiState = MutableStateFlow<ArrivalsUiState>(ArrivalsUiState.Loading)
     val uiState: StateFlow<ArrivalsUiState> = _uiState.asStateFlow()
 
-    private val _routeFilter = MutableStateFlow<String?>(null)
-    val routeFilter: StateFlow<String?> = _routeFilter.asStateFlow()
+    /** The buses being shown; empty means every bus. */
+    private val _routeFilter = MutableStateFlow<Set<String>>(emptySet())
+    val routeFilter: StateFlow<Set<String>> = _routeFilter.asStateFlow()
 
     init {
         if (initial.routes.isEmpty()) {
@@ -48,8 +52,13 @@ class StopDetailViewModel(
         refresh()
     }
 
-    fun setRouteFilter(route: String?) {
-        _routeFilter.value = route
+    /** Adds [route] to the buses shown, or takes it off if it already is. */
+    fun toggleRoute(route: String) = setRoutes(_routeFilter.value.let { if (route in it) it - route else it + route })
+
+    fun showAllRoutes() = setRoutes(emptySet())
+
+    private fun setRoutes(routes: Set<String>) {
+        _routeFilter.value = routes
         _uiState.value = ArrivalsUiState.Loading
         refresh()
     }
@@ -78,7 +87,17 @@ class StopDetailViewModel(
     private suspend fun load() {
         // Keep showing the current list while a refresh is in flight, rather than flashing a spinner.
         if (_uiState.value !is ArrivalsUiState.Loaded) _uiState.value = ArrivalsUiState.Loading
-        val result = runCatching { apiClient.arrivals(stopId, _routeFilter.value) }
+        val routes = _routeFilter.value
+        val result = runCatching {
+            if (routes.isEmpty()) {
+                apiClient.arrivals(stopId, null)
+            } else {
+                // The server filters on one route at a time, so ask for each chosen one and merge by when they are due.
+                coroutineScope { routes.map { route -> async { apiClient.arrivals(stopId, route) } }.awaitAll() }
+                    .flatten()
+                    .sortedBy { it.expectedEpochSeconds }
+            }
+        }
         // runCatching also catches the cancellation of a superseded request, which must not show as an error.
         currentCoroutineContext().ensureActive()
         _uiState.value = result.fold(

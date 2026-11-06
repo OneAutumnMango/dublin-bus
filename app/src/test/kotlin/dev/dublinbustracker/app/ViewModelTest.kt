@@ -94,7 +94,7 @@ class ViewModelTest {
             },
         )
 
-        vm.setRouteFilter("15")
+        vm.toggleRoute("15")
         waitFor { (vm.uiState.value as? ArrivalsUiState.Loaded)?.arrivals?.firstOrNull()?.destination == "Filtered" }
         release.countDown()
         Thread.sleep(300) // time for the stale reply to arrive, if it were going to be used
@@ -168,5 +168,31 @@ class ViewModelTest {
         vm.removeRoute("S8")
         assertEquals(emptyList(), store.saved.routes)
         assertEquals(emptySet(), store.saved.hidden)
+    }
+
+    @Test
+    fun `several buses can be picked at once and their arrivals are merged by when they are due`() {
+        val vm = StopDetailViewModel(
+            Stop("s1", "1", "Stop", 0.0, 0.0, routes = listOf("15", "4", "9")),
+            client { request ->
+                when (request.url.queryParameter("route")) {
+                    "15" -> """[{"routeShortName":"15","destination":"A","dueMinutes":9,"isRealtime":true,"expectedEpochSeconds":900}]"""
+                    "4" -> """[{"routeShortName":"4","destination":"B","dueMinutes":2,"isRealtime":true,"expectedEpochSeconds":200}]"""
+                    else -> "[]"
+                }
+            },
+        )
+
+        vm.toggleRoute("15")
+        vm.toggleRoute("4")
+        waitFor { (vm.uiState.value as? ArrivalsUiState.Loaded)?.arrivals?.size == 2 }
+
+        assertEquals(setOf("15", "4"), vm.routeFilter.value)
+        assertEquals(listOf("4", "15"), (vm.uiState.value as ArrivalsUiState.Loaded).arrivals.map { it.routeShortName })
+
+        vm.toggleRoute("4") // taking one off leaves the other
+        waitFor { (vm.uiState.value as? ArrivalsUiState.Loaded)?.arrivals?.map { it.routeShortName } == listOf("15") }
+        vm.showAllRoutes()
+        assertEquals(emptySet(), vm.routeFilter.value)
     }
 }

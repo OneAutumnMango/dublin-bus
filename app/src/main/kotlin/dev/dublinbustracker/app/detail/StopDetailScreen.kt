@@ -112,15 +112,16 @@ fun StopDetailScreen(
                 modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
+                // "All" is simply no bus picked; each bus chip adds to or removes from the ones shown.
                 FilterChip(
-                    selected = routeFilter == null,
-                    onClick = { viewModel.setRouteFilter(null) },
+                    selected = routeFilter.isEmpty(),
+                    onClick = viewModel::showAllRoutes,
                     label = { Text("All") },
                 )
                 stop.routes.forEach { route ->
                     FilterChip(
-                        selected = routeFilter == route,
-                        onClick = { viewModel.setRouteFilter(route.takeIf { routeFilter != route }) },
+                        selected = route in routeFilter,
+                        onClick = { viewModel.toggleRoute(route) },
                         label = { Text(route) },
                     )
                 }
