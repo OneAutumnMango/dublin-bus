@@ -44,6 +44,21 @@ class TransitApiClientTest {
     }
 
     @Test
+    fun `typed text stays one path segment`() = runTest {
+        server.enqueue(MockResponse().setBody("[]"))
+
+        client().vehiclesForRoute("1/2?x")
+
+        assertEquals("/v1/routes/1%2F2%3Fx/vehicles", server.takeRequest().path)
+    }
+
+    @Test
+    fun `a dot segment is refused rather than climbing out of the path`() = runTest {
+        assertFailsWith<TransitApiException> { client().vehiclesForRoute("..") }
+        assertEquals(0, server.requestCount)
+    }
+
+    @Test
     fun `nearby stops pass coordinates and radius`() = runTest {
         server.enqueue(MockResponse().setBody("[]"))
 

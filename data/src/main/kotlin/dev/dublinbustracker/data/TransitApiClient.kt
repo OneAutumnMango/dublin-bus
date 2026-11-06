@@ -19,6 +19,7 @@ import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import java.net.URLEncoder
 import java.util.concurrent.TimeUnit
 
 /** Keeps OkHttp an implementation detail of this module rather than the caller's problem. */
@@ -171,11 +172,11 @@ class TransitApiClient(
         ) { body -> json.decodeFromString<List<StopDto>>(body).map { it.toStop() } }
 
     suspend fun stop(stopIdOrCode: String): Stop =
-        get("v1/stops/$stopIdOrCode") { body -> json.decodeFromString<StopDto>(body).toStop() }
+        get("v1/stops/${seg(stopIdOrCode)}") { body -> json.decodeFromString<StopDto>(body).toStop() }
 
     suspend fun arrivals(stopId: String, route: String? = null, limit: Int = 20): List<Arrival> =
         get(
-            "v1/stops/$stopId/arrivals",
+            "v1/stops/${seg(stopId)}/arrivals",
             "route" to route,
             "limit" to limit.toString(),
         ) { body -> json.decodeFromString<List<ArrivalDto>>(body).map { it.toArrival() } }
@@ -201,13 +202,13 @@ class TransitApiClient(
 
     /** Live buses on a route, optionally only those running in one [directionId]. */
     suspend fun vehiclesForRoute(route: String, directionId: String? = null): List<VehiclePosition> =
-        get("v1/routes/$route/vehicles") { body ->
+        get("v1/routes/${seg(route)}/vehicles") { body ->
             json.decodeFromString<List<VehicleDto>>(body).map { it.toVehicle() }
                 .filter { directionId == null || it.directionId == directionId }
         }
 
     suspend fun trip(tripId: String): TripInfo =
-        get("v1/trips/$tripId") { body ->
+        get("v1/trips/${seg(tripId)}") { body ->
             json.decodeFromString<TripDto>(body).let {
                 TripInfo(it.tripId, it.routeId, it.routeShortName, it.headsign, it.directionId)
             }
@@ -215,7 +216,7 @@ class TransitApiClient(
 
     /** A trip's route, its bus's last position and the stops it has still to make. */
     suspend fun tripDetails(tripId: String): TripDetails =
-        get("v1/trips/$tripId") { body ->
+        get("v1/trips/${seg(tripId)}") { body ->
             val dto = json.decodeFromString<TripDetailsDto>(body)
             TripDetails(
                 trip = TripInfo(dto.tripId, dto.routeId, dto.routeShortName, dto.headsign, dto.directionId),
@@ -226,19 +227,25 @@ class TransitApiClient(
 
     /** The path a trip drives, as map points. */
     suspend fun tripShape(tripId: String): List<LatLon> =
-        get("v1/trips/$tripId/shape") { body -> decodePolyline(json.decodeFromString<ShapeDto>(body).encodedPolyline) }
+        get("v1/trips/${seg(tripId)}/shape") { body -> decodePolyline(json.decodeFromString<ShapeDto>(body).encodedPolyline) }
 
     /** The path a route drives in one direction. */
     suspend fun routeShape(route: String, directionId: String): List<LatLon> =
-        get("v1/routes/$route/shape", "direction" to directionId) { body ->
+        get("v1/routes/${seg(route)}/shape", "direction" to directionId) { body ->
             decodePolyline(json.decodeFromString<ShapeDto>(body).encodedPolyline)
         }
 
     /** A route's stops in running order for one direction. */
     suspend fun routeStops(route: String, directionId: String): List<Stop> =
-        get("v1/routes/$route/stops", "direction" to directionId) { body ->
+        get("v1/routes/${seg(route)}/stops", "direction" to directionId) { body ->
             json.decodeFromString<RouteStopsDto>(body).directions[directionId].orEmpty().map { it.toStop() }
         }
+
+    /** One path segment from text a person typed: "/" and "?" stay data, and "." or ".." can't climb out of it. */
+    private fun seg(value: String): String {
+        if (value == "." || value == "..") throw TransitApiException("'$value' is not a valid name")
+        return URLEncoder.encode(value, "UTF-8").replace("+", "%20")
+    }
 
     private suspend fun <T> get(
         path: String,
@@ -253,7 +260,7 @@ class TransitApiClient(
             ?: throw TransitApiException("Server address is not a valid URL: ${settings.baseUrl}")
 
         val url: HttpUrl = base.newBuilder()
-            .addPathSegments(path)
+            .addEncodedPathSegments(path)
             .apply {
                 query.forEach { (name, value) ->
                     if (!value.isNullOrBlank()) addQueryParameter(name, value)
