@@ -18,6 +18,8 @@ data class FavouriteStop(
     val lon: Double = 0.0,
     /** Which way each route goes at this stop, kept so the list can show it without the server. */
     val headings: List<FavouriteHeading> = emptyList(),
+    /** The user's own name for the stop; blank means show the official one. */
+    val nickname: String = "",
 ) {
     /** True for entries migrated from the old id-only format, which the UI backfills. */
     val needsDetails: Boolean get() = name.isBlank()
@@ -62,11 +64,14 @@ class FavouritesRepository(private val storage: FavouritesStorage) {
         )
     }
 
+    fun rename(stopId: String, nickname: String) =
+        publish(_favourites.value.map { if (it.id == stopId) it.copy(nickname = nickname.trim()) else it })
+
     fun remove(stopId: String) = publish(_favourites.value.filterNot { it.id == stopId })
 
     /** Fills in or refreshes a favourite once the server has supplied its details. */
     fun updateDetails(stop: Stop) {
-        val updated = _favourites.value.map { if (it.id == stop.id) FavouriteStop.of(stop) else it }
+        val updated = _favourites.value.map { if (it.id == stop.id) FavouriteStop.of(stop).copy(nickname = it.nickname) else it }
         // Details are refreshed on every visit; only write when something actually changed.
         if (updated != _favourites.value) publish(updated)
     }

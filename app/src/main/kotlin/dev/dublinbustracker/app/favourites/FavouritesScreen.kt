@@ -10,7 +10,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MyLocation
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -35,6 +40,7 @@ import dev.dublinbustracker.core.Stop
 import dev.dublinbustracker.core.distanceText
 import dev.dublinbustracker.core.headingsText
 import dev.dublinbustracker.core.sortedByDistance
+import dev.dublinbustracker.data.FavouriteStop
 import dev.dublinbustracker.data.FavouritesRepository
 import dev.dublinbustracker.data.TransitApiClient
 import kotlinx.coroutines.currentCoroutineContext
@@ -56,6 +62,7 @@ fun FavouritesScreen(
     var nearestFirst by remember { mutableStateOf(prefs.getBoolean(NEAREST_FIRST, false)) }
     var here by remember { mutableStateOf<LatLon?>(null) }
     var status by remember { mutableStateOf<String?>(null) }
+    var renaming by remember { mutableStateOf<FavouriteStop?>(null) }
 
     fun setNearestFirst(on: Boolean) {
         nearestFirst = on
@@ -124,6 +131,27 @@ fun FavouritesScreen(
         favourites.map { it to null }
     }
 
+    renaming?.let { target ->
+        var draft by remember(target.id) { mutableStateOf(target.nickname) }
+        AlertDialog(
+            onDismissRequest = { renaming = null },
+            title = { Text("Name this stop") },
+            text = {
+                OutlinedTextField(
+                    value = draft,
+                    onValueChange = { draft = it },
+                    singleLine = true,
+                    label = { Text(target.name.ifBlank { target.id }) },
+                    supportingText = { Text("Leave blank to use the official name") },
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { favouritesRepository.rename(target.id, draft); renaming = null }) { Text("Save") }
+            },
+            dismissButton = { TextButton(onClick = { renaming = null }) { Text("Cancel") } },
+        )
+    }
+
     Column(modifier = Modifier.fillMaxSize()) {
         FilterChip(
             selected = nearestFirst,
@@ -140,10 +168,16 @@ fun FavouritesScreen(
             items(rows, key = { it.first.id }) { (favourite, meters) ->
                 AppListItem(
                     onClick = { onStopSelected(favourite.toStop()) },
-                    headlineContent = { Text(favourite.name.ifBlank { favourite.id }) },
+                    headlineContent = { Text(favourite.nickname.ifBlank { favourite.name.ifBlank { favourite.id } }) },
                     supportingContent = {
                         Column {
-                            Text(listOfNotNull("Stop ${favourite.code.ifBlank { "-" }}", meters?.let(::distanceText)).joinToString(" · "))
+                            Text(
+                                listOfNotNull(
+                                    favourite.name.takeIf { favourite.nickname.isNotBlank() },
+                                    "Stop ${favourite.code.ifBlank { "-" }}",
+                                    meters?.let(::distanceText),
+                                ).joinToString(" · "),
+                            )
                             if (favourite.headings.isNotEmpty()) {
                                 // e.g. "4 (W)  L25 (W)  L27 (SW)": each bus number and the way it goes from this stop.
                                 Text(
@@ -155,6 +189,7 @@ fun FavouritesScreen(
                         }
                     },
                     trailingContent = {
+                        IconButton(onClick = { renaming = favourite }) { Icon(Icons.Filled.Edit, contentDescription = "Rename") }
                         FavouriteStarButton(isFavourite = true, onToggle = { favouritesRepository.remove(favourite.id) })
                     },
                 )
