@@ -70,7 +70,7 @@ direction and a lighter tint for the other, with a legend naming where each is h
 its details. The compass in the corner shows how the map is turned: tap it to face north, double-tap
 to lock north (a padlock appears).
 
-Dublin is downloaded for offline use on first launch. Settings > Offline maps lists what's stored
+Dublin is downloaded for offline use on first launch (once on an unmetered connection - it waits for Wi-Fi rather than use mobile data). Settings > Offline maps lists what's stored
 and lets you add more: pick Cork, Galway, Limerick or Waterford, or fit any area inside the frame
 on the map, and it shows the size before you download. Delete areas there too.
 

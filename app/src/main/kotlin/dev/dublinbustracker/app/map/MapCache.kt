@@ -1,6 +1,7 @@
 package dev.dublinbustracker.app.map
 
 import android.content.Context
+import android.net.ConnectivityManager
 import dev.dublinbustracker.core.AREA_PRESETS
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.launch
@@ -28,6 +29,11 @@ object MapCache {
             },
         )
 
+        // Downloads the app starts on its own wait for an unmetered connection (Wi-Fi), so opening
+        // it on mobile data never spends the user's allowance. A download the user asks for in
+        // Settings goes ahead on any connection.
+        if (isMetered(context)) return
+
         MainScope().launch {
             val existing = OfflineMaps.regions(context)
             // An interrupted download picks up where it left off; a finished one is a no-op.
@@ -44,4 +50,7 @@ object MapCache {
             }
         }
     }
+
+    private fun isMetered(context: Context): Boolean =
+        context.getSystemService(ConnectivityManager::class.java)?.isActiveNetworkMetered ?: true
 }
