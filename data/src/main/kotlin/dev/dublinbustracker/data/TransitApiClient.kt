@@ -80,15 +80,6 @@ private data class VehicleDto(
 )
 
 @Serializable
-private data class TripDto(
-    val tripId: String,
-    val routeId: String = "",
-    val routeShortName: String = "",
-    val headsign: String = "",
-    val directionId: String = "",
-)
-
-@Serializable
 private data class TripVehicleDto(
     val vehicleId: String,
     val label: String = "",
@@ -207,12 +198,7 @@ class TransitApiClient(
                 .filter { directionId == null || it.directionId == directionId }
         }
 
-    suspend fun trip(tripId: String): TripInfo =
-        get("v1/trips/${seg(tripId)}") { body ->
-            json.decodeFromString<TripDto>(body).let {
-                TripInfo(it.tripId, it.routeId, it.routeShortName, it.headsign, it.directionId)
-            }
-        }
+    suspend fun trip(tripId: String): TripInfo = tripDetails(tripId).trip
 
     /** A trip's route, its bus's last position and the stops it has still to make. */
     suspend fun tripDetails(tripId: String): TripDetails =
