@@ -9,6 +9,9 @@ import dev.dublinbustracker.app.map.TrackingStore
 import dev.dublinbustracker.app.map.Viewport
 import dev.dublinbustracker.app.route.RouteMapViewModel
 import dev.dublinbustracker.core.Stop
+import dev.dublinbustracker.data.HiddenDirection
+import dev.dublinbustracker.data.ProfileRoute
+import dev.dublinbustracker.data.RouteProfile
 import dev.dublinbustracker.data.ServerSettings
 import dev.dublinbustracker.data.TransitApiClient
 import java.util.concurrent.CountDownLatch
@@ -194,5 +197,23 @@ class ViewModelTest {
         waitFor { (vm.uiState.value as? ArrivalsUiState.Loaded)?.arrivals?.map { it.routeShortName } == listOf("15") }
         vm.showAllRoutes()
         assertEquals(emptySet(), vm.routeFilter.value)
+    }
+
+    @Test
+    fun `loading a profile replaces what is followed, keeping its colours and switched-off directions, and it can be saved again`() {
+        val vm = MapViewModel(client { "[]" })
+        val profile = RouteProfile(
+            "Commute",
+            listOf(ProfileRoute("4", 2), ProfileRoute("S8", 0)),
+            listOf(HiddenDirection("S8", "1")),
+        )
+
+        vm.loadProfile(profile)
+
+        val state = vm.tracking.value
+        assertEquals(listOf("4" to 2, "S8" to 0), state.routes.map { it.name to it.colourIndex })
+        assertTrue(state.enabled)
+        assertEquals(setOf("S8" to "1"), state.hidden)
+        assertEquals(profile.copy(name = "Again"), vm.currentProfile("Again"))
     }
 }

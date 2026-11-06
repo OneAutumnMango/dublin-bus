@@ -13,6 +13,9 @@ import dev.dublinbustracker.core.stopTimesLabel
 import dev.dublinbustracker.core.nextColourIndex
 import dev.dublinbustracker.core.rankRouteSuggestions
 import dev.dublinbustracker.core.VehiclePosition
+import dev.dublinbustracker.data.HiddenDirection
+import dev.dublinbustracker.data.ProfileRoute
+import dev.dublinbustracker.data.RouteProfile
 import dev.dublinbustracker.data.TransitApiClient
 import dev.dublinbustracker.data.TransitApiException
 import kotlinx.coroutines.Job
@@ -168,6 +171,33 @@ class MapViewModel(
                 .map { rankRouteSuggestions(query, it) }
                 .getOrDefault(emptyList())
         }
+    }
+
+    /** Replaces what is being followed with a saved profile: its routes, their colours and the directions that were off. */
+    fun loadProfile(profile: RouteProfile) {
+        timesFetchedAt.clear()
+        _tracking.update {
+            it.copy(
+                enabled = true,
+                routes = profile.routes.map { route -> TrackedRoute(route.name, route.colourIndex) },
+                hidden = profile.hidden.map { hidden -> hidden.route to hidden.direction }.toSet(),
+                vehicles = emptyMap(),
+                shapes = emptyMap(),
+                stops = emptyMap(),
+                stopTimes = emptyMap(),
+                message = null,
+            )
+        }
+        profile.routes.forEach { route -> viewModelScope.launch { restore(route.name) } }
+    }
+
+    /** The routes and switched-off directions as they stand now, to save as a profile called [name]. */
+    fun currentProfile(name: String): RouteProfile = _tracking.value.let { state ->
+        RouteProfile(
+            name,
+            state.routes.map { ProfileRoute(it.name, it.colourIndex) },
+            state.hidden.map { (route, direction) -> HiddenDirection(route, direction) },
+        )
     }
 
     private var timesJob: Job? = null

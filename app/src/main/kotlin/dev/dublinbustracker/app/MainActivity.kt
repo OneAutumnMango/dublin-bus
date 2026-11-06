@@ -130,7 +130,7 @@ private fun AppRoot(container: AppContainer) {
                         container.recentStops,
                         onStopSelected = { selectedStop = it },
                     )
-                    AppTab.MAP -> MapScreen(container.apiClient, container.mapStartStore, onStopSelected = { selectedStop = it })
+                    AppTab.MAP -> MapScreen(container.apiClient, container.mapStartStore, container.routeProfiles, onStopSelected = { selectedStop = it })
                     AppTab.FAVOURITES -> FavouritesScreen(
                         container.apiClient,
                         container.favouritesRepository,

@@ -36,6 +36,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenuItem
+import dev.dublinbustracker.data.RouteProfilesRepository
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -110,7 +112,7 @@ private val BROWSE_LAYERS = listOf(CLUSTER_LAYER, "stop-cluster-count", STOP_LAY
 private val TRACK_LAYERS = listOf("track-lines", TRACK_STOP_LAYER, TRACK_BUS_LAYER, "track-bus-arrows", "track-bus-labels", TRACK_TIMES_LAYER)
 
 @Composable
-fun MapScreen(apiClient: TransitApiClient, mapStartStore: MapStartStore, onStopSelected: (Stop) -> Unit) {
+fun MapScreen(apiClient: TransitApiClient, mapStartStore: MapStartStore, routeProfiles: RouteProfilesRepository, onStopSelected: (Stop) -> Unit) {
     val context = LocalContext.current
     val density = context.resources.displayMetrics.density
     val viewModel = viewModel<MapViewModel>(
@@ -126,6 +128,10 @@ fun MapScreen(apiClient: TransitApiClient, mapStartStore: MapStartStore, onStopS
     val latestOnStopSelected by rememberUpdatedState(onStopSelected)
     val latestTracking by rememberUpdatedState(tracking)
     var infoTripId by remember { mutableStateOf<String?>(null) }
+    var showProfiles by remember { mutableStateOf(false) }
+    // Set when a profile is picked: the camera then frames its routes as soon as their paths have come in.
+    var pendingFrame by remember { mutableStateOf(false) }
+    val profiles by routeProfiles.profiles.collectAsState()
 
     var pendingLocationRequest by remember { mutableStateOf(false) }
     val locationPermissionLauncher = rememberLauncherForActivityResult(
@@ -320,6 +326,31 @@ fun MapScreen(apiClient: TransitApiClient, mapStartStore: MapStartStore, onStopS
         )
     }
 
+    LaunchedEffect(pendingFrame, tracking.shapes, tracking.routes) {
+        if (!pendingFrame || tracking.routes.isEmpty() || tracking.routes.any { it.name !in tracking.shapes }) return@LaunchedEffect
+        pendingFrame = false
+        val points = tracking.shapes.values.flatMap { it.values }.flatten().map { LatLng(it.lat, it.lon) }
+        val map = handle.map
+        if (map != null && points.size >= 2) {
+            map.easeCamera(CameraUpdateFactory.newLatLngBounds(LatLngBounds.Builder().includes(points).build(), 80), 600)
+        }
+    }
+
+    if (showProfiles) {
+        RouteProfilesDialog(
+            profiles = profiles,
+            followedCount = tracking.routes.size,
+            onLoad = {
+                viewModel.loadProfile(it)
+                pendingFrame = true
+                showProfiles = false
+            },
+            onSave = { routeProfiles.save(viewModel.currentProfile(it)) },
+            onDelete = { routeProfiles.delete(it.name) },
+            onDismiss = { showProfiles = false },
+        )
+    }
+
     // When a route is added, frame everything being followed so the new one is in view.
     var followedCount by remember { mutableStateOf(0) }
     LaunchedEffect(tracking.routes.size, tracking.shapes) {
@@ -436,8 +467,9 @@ fun MapScreen(apiClient: TransitApiClient, mapStartStore: MapStartStore, onStopS
             }
 
             MapCompass(handle, modifier = Modifier.align(Alignment.TopEnd).padding(16.dp))
-            MapMenu(modifier = Modifier.align(Alignment.TopEnd).padding(top = 68.dp, end = 16.dp)) {
+            MapMenu(modifier = Modifier.align(Alignment.TopEnd).padding(top = 68.dp, end = 16.dp)) { close ->
                 MapToggle("Next 2 times at stops (zoom in)", tracking.showStopTimes, viewModel::setShowStopTimes)
+                DropdownMenuItem(text = { Text("Route profiles...") }, onClick = { close(); showProfiles = true })
             }
 
             FloatingActionButton(

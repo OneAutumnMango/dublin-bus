@@ -45,16 +45,16 @@ fun rememberMapFlag(key: String, default: Boolean): MapFlag {
     return remember(key) { MapFlag(context, key, context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(key, default)) }
 }
 
-/** The map's three-dot menu, a round button in the style of the compass; [content] is its toggles. */
+/** The map's three-dot menu, a round button in the style of the compass; [content] is its items, given a way to close the menu. */
 @Composable
-fun MapMenu(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+fun MapMenu(modifier: Modifier = Modifier, content: @Composable ColumnScope.(close: () -> Unit) -> Unit) {
     var open by remember { mutableStateOf(false) }
     Box(modifier = modifier) {
         Surface(modifier = Modifier.size(44.dp), shape = CircleShape, shadowElevation = 4.dp, color = MaterialTheme.colorScheme.surface) {
             IconButton(onClick = { open = true }) { Icon(Icons.Filled.MoreVert, contentDescription = "Map options") }
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }, offset = androidx.compose.ui.unit.DpOffset(0.dp, 4.dp)) {
-            content()
+            content { open = false }
         }
     }
 }
