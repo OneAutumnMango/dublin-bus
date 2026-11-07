@@ -89,8 +89,7 @@ private const val MAX_RADIUS_METERS = 5_000
 
 /** Below this the whole city is a few screens wide and a label per stop would be noise; that is roughly a followed route fitted to the screen. */
 const val STOP_TIMES_MIN_ZOOM = 10.5
-/** How many times a stop's label stacks, and how many stops are fetched at once. */
-private const val STOP_TIMES_SHOWN = 4
+/** How many stops are fetched at once. */
 private const val STOP_TIMES_PARALLEL = 8
 private const val STOP_TIMES_MAX_AGE_MS = 60_000L
 
@@ -253,7 +252,7 @@ class MapViewModel(
                         gate.withPermit {
                             // A failed fetch keeps the label it has; only an answer replaces it.
                             val perRoute = runCatching {
-                                routes.map { route -> route to apiClient.arrivals(stop.id, route, limit = STOP_TIMES_SHOWN) }
+                                routes.map { route -> route to apiClient.arrivals(stop.id, route, limit = 2) }
                             }.getOrNull() ?: return@launch
                             val label = stopTimesLabel(perRoute, System.currentTimeMillis() / 1000, ZoneId.systemDefault())
                             timesFetchedAt["${stop.id}|$routes"] = now

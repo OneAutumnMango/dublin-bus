@@ -340,7 +340,7 @@ fun MapScreen(apiClient: TransitApiClient, mapStartStore: MapStartStore, routePr
             OptionGroup("Show") {
                 SwitchRow("Nearby buses", showBuses, { viewModel.toggleBuses() }, description = "While browsing, not following")
                 SwitchRow("Route stops", tracking.showStops, viewModel::setShowStops)
-                SwitchRow("Next 4 times at stops", tracking.showStopTimes, viewModel::setShowStopTimes, description = "On your routes, when zoomed in")
+                SwitchRow("Next 2 times per route at stops", tracking.showStopTimes, viewModel::setShowStopTimes, description = "On your routes, when zoomed in")
             }
             if (tracking.routes.isNotEmpty()) {
                 OptionGroup("Directions") { DirectionsList(tracking, viewModel::toggleDirection) }
