@@ -1,6 +1,9 @@
 package dev.dublinbustracker.app.widget
 
+import android.appwidget.AppWidgetManager
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -23,6 +26,7 @@ import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.action.ActionCallback
 import androidx.glance.appwidget.action.actionRunCallback
+import androidx.glance.appwidget.action.actionStartActivity as actionStartIntent
 import androidx.glance.appwidget.cornerRadius
 import androidx.glance.appwidget.provideContent
 import androidx.glance.appwidget.state.updateAppWidgetState
@@ -54,6 +58,7 @@ import dev.dublinbustracker.data.WidgetMode
 import dev.dublinbustracker.data.dropRoutes
 import dev.dublinbustracker.data.keepRoutes
 import dev.dublinbustracker.data.nearestFavourite
+import kotlinx.coroutines.delay
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 
@@ -64,7 +69,7 @@ private val REFRESHED_FORMAT = DateTimeFormatter.ofPattern("HH:mm")
 sealed interface WidgetView {
     data object Loading : WidgetView
     data object NotConfigured : WidgetView
-    data object Unreachable : WidgetView
+    data class Unreachable(val reason: String?) : WidgetView
     data object NoFavourites : WidgetView
     data object NoLocation : WidgetView
     data class Arrivals(val title: String, val subtitle: String?, val arrivals: List<Arrival>, val refreshedAt: String) : WidgetView
@@ -83,8 +88,12 @@ class BusStopWidget : GlanceAppWidget() {
             // and a refresh (or a just-finished setup) always fetches again.
             val refreshedAt = currentState(REFRESHED_AT)
             var view by remember { mutableStateOf<WidgetView>(WidgetView.Loading) }
-            LaunchedEffect(refreshedAt) { view = load(context, appWidgetId) }
-            WidgetContent(view)
+            LaunchedEffect(refreshedAt) {
+                val next = load(context, appWidgetId)
+                // One failed fetch shouldn't wipe good data that's a couple of minutes old.
+                view = if (next is WidgetView.Unreachable && view is WidgetView.Arrivals) view else next
+            }
+            WidgetContent(context, appWidgetId, view)
         }
     }
 }
@@ -112,7 +121,7 @@ private suspend fun resolve(context: Context, container: AppContainer, config: W
     val (stopId, title, subtitle) = when (config.mode) {
         WidgetMode.SINGLE_STOP -> {
             val id = config.stopId ?: return WidgetView.NotConfigured
-            val stop = runCatching { container.apiClient.stop(id) }.getOrNull() ?: return WidgetView.Unreachable
+            val stop = retrying { container.apiClient.stop(id) }.getOrElse { return WidgetView.Unreachable(it.message) }
             Triple(id, stop.name, subtitleOf(stopNumber(stop.code), config.routes.sorted().joinToString(", ").ifEmpty { null }?.let { "Buses $it" }))
         }
         WidgetMode.NEAREST_FAVOURITE -> {
@@ -127,7 +136,7 @@ private suspend fun resolve(context: Context, container: AppContainer, config: W
             )
         }
     }
-    val arrivals = runCatching { container.apiClient.arrivals(stopId, limit = 20) }.getOrNull() ?: return WidgetView.Unreachable
+    val arrivals = retrying { container.apiClient.arrivals(stopId, limit = 20) }.getOrElse { return WidgetView.Unreachable(it.message) }
     // Buses the user hid for this favourite never show, in either mode.
     val hidden = container.favouritesRepository.favourites.value.firstOrNull { it.id == stopId }?.hiddenRoutes.orEmpty()
     return WidgetView.Arrivals(
@@ -136,6 +145,15 @@ private suspend fun resolve(context: Context, container: AppContainer, config: W
         dropRoutes(keepRoutes(arrivals, config.routes) { it.routeShortName }, hidden) { it.routeShortName }.take(SHOWN_ARRIVALS),
         refreshedAt = REFRESHED_FORMAT.format(LocalTime.now()),
     )
+}
+
+/** A background refresh often runs just as the network is waking up, so a couple of quick retries beat a one-shot failure. */
+private suspend fun <T> retrying(block: suspend () -> T): Result<T> {
+    repeat(2) {
+        runCatching { block() }.let { if (it.isSuccess) return it }
+        delay(1500)
+    }
+    return runCatching { block() }
 }
 
 private fun stopNumber(code: String): String? = code.takeIf { it.isNotBlank() }?.let { "Stop $it" }
@@ -148,15 +166,26 @@ private val MUTED = ColorProvider(day = Color(0xFF5F5B66), night = Color(0xFFB0A
 private val BACKGROUND = ColorProvider(day = Color(0xFFFDFDFD), night = Color(0xFF2B2930))
 
 @Composable
-private fun WidgetContent(view: WidgetView) {
+private fun WidgetContent(context: Context, appWidgetId: Int?, view: WidgetView) {
     Column(
         modifier = GlanceModifier.fillMaxSize().cornerRadius(20.dp).background(BACKGROUND).padding(12.dp)
-            .clickable(actionStartActivity<MainActivity>()),
+            .clickable(
+                if (view is WidgetView.NotConfigured && appWidgetId != null) {
+                    // Opens the setup screen for this widget; the data makes each widget's intent distinct.
+                    actionStartIntent(
+                        Intent(context, WidgetConfigActivity::class.java)
+                            .setData(Uri.parse("widget://$appWidgetId"))
+                            .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId),
+                    )
+                } else {
+                    actionStartActivity<MainActivity>()
+                },
+            ),
     ) {
         when (view) {
             is WidgetView.Loading -> Message("Loading...")
-            is WidgetView.NotConfigured -> Message("Tap to open the app, then remove and re-add this widget to set it up.")
-            is WidgetView.Unreachable -> Message("Can't reach the server - check the address in Settings.")
+            is WidgetView.NotConfigured -> Message("This widget isn't set up yet. Tap to choose what it shows.")
+            is WidgetView.Unreachable -> Message("Couldn't load buses: ${view.reason ?: "unknown error"}. Tap the widget to open the app.")
             is WidgetView.NoFavourites -> Message("No favourite stops to choose from. Star a stop in the app, or exclude fewer.")
             is WidgetView.NoLocation -> Message("Waiting for your location. Open the app once, or allow location \"all the time\".")
             is WidgetView.Arrivals -> {
