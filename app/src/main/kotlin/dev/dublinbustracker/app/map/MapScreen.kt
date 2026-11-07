@@ -32,6 +32,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material3.CircularProgressIndicator
+import dev.dublinbustracker.data.RouteProfile
 import dev.dublinbustracker.data.RouteProfilesRepository
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -123,9 +124,14 @@ fun MapScreen(apiClient: TransitApiClient, mapStartStore: MapStartStore, routePr
     val latestTracking by rememberUpdatedState(tracking)
     var infoTripId by remember { mutableStateOf<String?>(null) }
     var showOptions by remember { mutableStateOf(false) }
+    var showProfiles by remember { mutableStateOf(false) }
     // Set when a profile is picked: the camera then frames its routes as soon as their paths have come in.
     var pendingFrame by remember { mutableStateOf(false) }
     val profiles by routeProfiles.profiles.collectAsState()
+    val loadProfile: (RouteProfile) -> Unit = {
+        viewModel.loadProfile(it)
+        pendingFrame = true
+    }
 
     var pendingLocationRequest by remember { mutableStateOf(false) }
     val locationPermissionLauncher = rememberLauncherForActivityResult(
@@ -345,15 +351,19 @@ fun MapScreen(apiClient: TransitApiClient, mapStartStore: MapStartStore, routePr
             if (tracking.routes.isNotEmpty()) {
                 OptionGroup("Directions") { DirectionsList(tracking, viewModel::toggleDirection) }
             }
+        }
+    }
+
+    if (showProfiles) {
+        MapOptionsSheet(onDismiss = { showProfiles = false }) {
             OptionGroup("Profiles") {
                 ProfilesGroup(
                     apiClient = apiClient,
                     profiles = profiles,
                     followedCount = tracking.routes.size,
                     onLoad = {
-                        viewModel.loadProfile(it)
-                        pendingFrame = true
-                        showOptions = false
+                        loadProfile(it)
+                        showProfiles = false
                     },
                     onSave = { routeProfiles.save(viewModel.currentProfile(it)) },
                     onDelete = { routeProfiles.delete(it.name) },
@@ -455,6 +465,12 @@ fun MapScreen(apiClient: TransitApiClient, mapStartStore: MapStartStore, routePr
             }
 
             MapCompass(handle, modifier = Modifier.align(Alignment.TopEnd).padding(16.dp))
+            ProfileButton(
+                profiles = profiles,
+                onOpen = { showProfiles = true },
+                onPick = loadProfile,
+                modifier = Modifier.align(Alignment.TopEnd).padding(top = 72.dp, end = 16.dp),
+            )
             FloatingActionButton(
                 onClick = {
                     if (hasLocationPermission(context)) {
