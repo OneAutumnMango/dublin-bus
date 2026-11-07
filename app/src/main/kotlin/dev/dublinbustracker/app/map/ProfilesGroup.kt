@@ -8,6 +8,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -41,9 +44,11 @@ fun ProfilesGroup(
     followedCount: Int,
     onLoad: (RouteProfile) -> Unit,
     onSave: (String) -> Unit,
+    onRename: (RouteProfile, String) -> Boolean,
     onDelete: (RouteProfile) -> Unit,
 ) {
     var name by remember { mutableStateOf("") }
+    var renaming by remember { mutableStateOf<RouteProfile?>(null) }
     // Which way a route's one switched-on direction heads is worked out from its stops, asked for as the list is shown.
     val headings = remember { mutableStateMapOf<Pair<String, String>, String>() }
     LaunchedEffect(profiles) {
@@ -77,6 +82,9 @@ fun ProfilesGroup(
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
+                IconButton(onClick = { renaming = profile }) {
+                    Icon(Icons.Filled.Edit, contentDescription = "Rename ${profile.name}", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
                 IconButton(onClick = { onDelete(profile) }) {
                     Icon(Icons.Filled.Delete, contentDescription = "Delete ${profile.name}", tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
@@ -103,5 +111,30 @@ fun ProfilesGroup(
             onClick = { onSave(name.trim()); name = "" },
             modifier = Modifier.fillMaxWidth(),
         ) { Text(if (replaces) "Replace" else "Save") }
+    }
+
+    renaming?.let { target ->
+        var draft by remember(target.name) { mutableStateOf(target.name) }
+        val taken = profiles.any { it.name != target.name && it.name.equals(draft.trim(), ignoreCase = true) }
+        AlertDialog(
+            onDismissRequest = { renaming = null },
+            title = { Text("Rename profile") },
+            text = {
+                OutlinedTextField(
+                    value = draft,
+                    onValueChange = { draft = it },
+                    singleLine = true,
+                    isError = taken,
+                    supportingText = { if (taken) Text("Another profile already has that name") },
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = draft.isNotBlank() && !taken,
+                    onClick = { if (onRename(target, draft)) renaming = null },
+                ) { Text("Save") }
+            },
+            dismissButton = { TextButton(onClick = { renaming = null }) { Text("Cancel") } },
+        )
     }
 }

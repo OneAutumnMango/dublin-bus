@@ -50,6 +50,24 @@ class RouteProfilesTest {
     }
 
     @Test
+    fun `renaming keeps a profile in place, but refuses a blank name or another profile's name`() {
+        val storage = FakeStorage()
+        val repository = RouteProfilesRepository(storage)
+        repository.save(profile("Home", "4"))
+        repository.save(profile("Work", "15"))
+
+        assertTrue(repository.rename("Home", "  Commute  "))
+        assertEquals(listOf("Commute", "Work"), repository.profiles.value.map { it.name })
+        assertEquals(listOf("Commute", "Work"), RouteProfilesRepository(storage).profiles.value.map { it.name })
+
+        assertFalse(repository.rename("Commute", "   "))
+        assertFalse(repository.rename("Commute", "work"))
+        assertFalse(repository.rename("Nope", "Other"))
+        assertTrue(repository.rename("Commute", "COMMUTE"))
+        assertEquals(listOf("COMMUTE", "Work"), repository.profiles.value.map { it.name })
+    }
+
+    @Test
     fun `deleting removes it for good, and corrupt storage reads as empty`() {
         val storage = FakeStorage()
         RouteProfilesRepository(storage).apply { save(profile("A", "4")); delete("A") }

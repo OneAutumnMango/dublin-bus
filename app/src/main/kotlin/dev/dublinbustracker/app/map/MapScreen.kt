@@ -366,6 +366,7 @@ fun MapScreen(apiClient: TransitApiClient, mapStartStore: MapStartStore, routePr
                         showProfiles = false
                     },
                     onSave = { routeProfiles.save(viewModel.currentProfile(it)) },
+                    onRename = { profile, newName -> routeProfiles.rename(profile.name, newName) },
                     onDelete = { routeProfiles.delete(it.name) },
                 )
             }

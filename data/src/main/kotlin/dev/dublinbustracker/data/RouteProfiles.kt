@@ -58,6 +58,19 @@ class RouteProfilesRepository(private val storage: FavouritesStorage) {
         return true
     }
 
+    /**
+     * Gives the profile called [name] a new name, keeping its place in the list. Returns false for a blank name, an unknown
+     * profile, or a name another profile already has (changing only the capitals of its own name is fine).
+     */
+    fun rename(name: String, newName: String): Boolean {
+        val trimmed = newName.trim()
+        val current = _profiles.value
+        if (trimmed.isEmpty() || current.none { it.name == name }) return false
+        if (current.any { it.name != name && it.name.equals(trimmed, ignoreCase = true) }) return false
+        publish(current.map { if (it.name == name) it.copy(name = trimmed) else it })
+        return true
+    }
+
     fun delete(name: String) = publish(_profiles.value.filterNot { it.name == name })
 
     private fun publish(updated: List<RouteProfile>) {
