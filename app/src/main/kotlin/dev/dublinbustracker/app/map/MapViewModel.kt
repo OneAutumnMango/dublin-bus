@@ -10,6 +10,7 @@ import dev.dublinbustracker.core.Stop
 import dev.dublinbustracker.core.destinationsOf
 import dev.dublinbustracker.core.distanceMeters
 import dev.dublinbustracker.core.Arrival
+import dev.dublinbustracker.core.dropShortHooks
 import dev.dublinbustracker.core.stopTimesLabel
 import dev.dublinbustracker.core.nextColourIndex
 import dev.dublinbustracker.core.rankRouteSuggestions
@@ -156,7 +157,7 @@ class MapViewModel(
         val stopCalls = directions.map { direction ->
             async { runCatching { apiClient.routeStops(name, direction) }.getOrNull()?.let { direction to it } }
         }
-        shapeCalls.awaitAll().filterNotNull().toMap() to stopCalls.awaitAll().filterNotNull().toMap()
+        shapeCalls.awaitAll().filterNotNull().toMap().mapValues { (_, path) -> dropShortHooks(path) } to stopCalls.awaitAll().filterNotNull().toMap()
     }
 
     fun onRouteQueryChanged(query: String) {

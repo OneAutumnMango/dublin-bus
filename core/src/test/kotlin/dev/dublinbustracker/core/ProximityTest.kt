@@ -106,4 +106,20 @@ class ProximityTest {
         assertEquals(null, headingAlongPath(path, LatLon(53.2, -6.5)))
         assertEquals(null, headingAlongPath(emptyList(), LatLon(53.0, -6.0)))
     }
+
+    @Test
+    fun `a short hook past a junction is cut, but real corners and long spurs stay`() {
+        // The L27 path near Oliver Plunkett Ct: south past the junction, then back west along the road.
+        val hooked = listOf(
+            LatLon(53.28396, -6.14632), LatLon(53.28382, -6.14631), LatLon(53.28350, -6.14624),
+            LatLon(53.28363, -6.14672), LatLon(53.28367, -6.14737),
+        )
+        assertEquals(listOf(hooked[0], hooked[1], hooked[3], hooked[4]), dropShortHooks(hooked))
+
+        val rightAngle = listOf(LatLon(53.0, -6.0), LatLon(53.0, -5.999), LatLon(53.0009, -5.999))
+        assertEquals(rightAngle, dropShortHooks(rightAngle))
+
+        val longSpur = listOf(LatLon(53.0, -6.0), LatLon(53.0, -5.998), LatLon(53.0, -5.9985), LatLon(53.0, -6.001))
+        assertEquals(longSpur, dropShortHooks(longSpur))
+    }
 }

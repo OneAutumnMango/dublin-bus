@@ -2,6 +2,7 @@ package dev.dublinbustracker.core
 
 import kotlin.math.PI
 import kotlin.math.asin
+import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.roundToInt
@@ -45,6 +46,26 @@ fun bearingDegrees(from: LatLon, to: LatLon): Double {
     val lat2 = to.lat * PI / 180
     val bearing = Math.toDegrees(atan2(sin(dLon) * cos(lat2), cos(lat1) * sin(lat2) - sin(lat1) * cos(lat2) * cos(dLon)))
     return (bearing + 360) % 360
+}
+
+/**
+ * Cuts the little hooks a published route path sometimes makes at a junction: it runs a few metres past the turn,
+ * then doubles back (a sharp turn with both legs short), which draws as a stray stub. Real corners (under about
+ * 110 degrees) and longer spurs, where a bus really does go out and back, are left alone.
+ */
+fun dropShortHooks(path: List<LatLon>, maxLegMeters: Double = 60.0, minTurnDegrees: Double = 110.0): List<LatLon> {
+    if (path.size < 3) return path
+    val kept = mutableListOf(path.first())
+    for (i in 1 until path.lastIndex) {
+        val prev = kept.last()
+        val here = path[i]
+        val next = path[i + 1]
+        val turn = abs((bearingDegrees(here, next) - bearingDegrees(prev, here) + 540) % 360 - 180)
+        if (turn >= minTurnDegrees && distanceMeters(prev, here) <= maxLegMeters && distanceMeters(here, next) <= maxLegMeters) continue
+        kept += here
+    }
+    kept += path.last()
+    return kept
 }
 
 /** Which of the eight compass points you'd head in to get from [from] to [to], e.g. "NW". */
