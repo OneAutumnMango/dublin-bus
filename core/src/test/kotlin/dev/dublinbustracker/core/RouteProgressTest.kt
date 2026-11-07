@@ -34,7 +34,7 @@ class RouteProgressTest {
     }
 
     @Test
-    fun `a stop's label stacks each route's next two arrivals, one per line, and skips routes with none`() {
+    fun `a stop's label stacks the next four arrivals across routes, soonest first, one per line`() {
         val now = 1_700_000_000L
         fun arrival(minutes: Int) = Arrival("4", "Heuston", minutes, isRealtime = true, expectedEpochSeconds = now + minutes * 60L)
 
@@ -44,7 +44,7 @@ class RouteProgressTest {
             ZoneId.of("Europe/Dublin"),
         )
 
-        assertEquals("4: 5 min\n4: 18 min\n15: 2 min", label)
+        assertEquals("15: 2 min\n4: 5 min\n4: 18 min\n4: 30 min", label)
         assertNull(stopTimesLabel(listOf("S8" to emptyList()), now, ZoneId.of("Europe/Dublin")))
     }
 }

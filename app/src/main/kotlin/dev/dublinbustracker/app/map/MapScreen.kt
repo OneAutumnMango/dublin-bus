@@ -246,7 +246,7 @@ fun MapScreen(apiClient: TransitApiClient, mapStartStore: MapStartStore, routePr
                 textAnchor(Property.TEXT_ANCHOR_TOP),
                 textOffset(arrayOf(0f, 0.8f)),
                 textJustify(Property.TEXT_JUSTIFY_LEFT),
-            ),
+            ).apply { minZoom = STOP_TIMES_MIN_ZOOM.toFloat() }, // the map hides them the moment you zoom out, with no wait on the view model
         )
         style.addSource(GeoJsonSource(TRACK_BUSES_SOURCE, collectionOf(emptyList())))
         style.addLayer(
@@ -340,7 +340,7 @@ fun MapScreen(apiClient: TransitApiClient, mapStartStore: MapStartStore, routePr
             OptionGroup("Show") {
                 SwitchRow("Nearby buses", showBuses, { viewModel.toggleBuses() }, description = "While browsing, not following")
                 SwitchRow("Route stops", tracking.showStops, viewModel::setShowStops)
-                SwitchRow("Next 2 times at stops", tracking.showStopTimes, viewModel::setShowStopTimes, description = "On your routes, when zoomed in")
+                SwitchRow("Next 4 times at stops", tracking.showStopTimes, viewModel::setShowStopTimes, description = "On your routes, when zoomed in")
             }
             if (tracking.routes.isNotEmpty()) {
                 OptionGroup("Directions") { DirectionsList(tracking, viewModel::toggleDirection) }
