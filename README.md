@@ -1,10 +1,12 @@
+> This is all vibe coded. Be warned. NEVER expose this server publicly.
+
 # Dublin Bus Tracker
 
 Search TFI/Dublin Bus stops by name or number, find one on a map, and see live arrivals.
 Favourite stops for quick access, and add a home screen widget for one stop.
 
 All transit data comes from the companion server in a separate, sibling repo:
-[`../dublin-bus-server`](../dublin-bus-server). It polls the NTA feeds on its own rate-limited
+[`OneAutumnMango/dublin-bus-server`](https://github.com/OneAutumnMango/dublin-bus-server). It polls the NTA feeds on its own rate-limited
 schedule, so this app never touches NTA directly and is never rate limited itself.
 
 ## Modules
