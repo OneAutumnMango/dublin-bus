@@ -9,6 +9,7 @@ import dev.dublinbustracker.core.Route
 import dev.dublinbustracker.core.Stop
 import dev.dublinbustracker.core.destinationsOf
 import dev.dublinbustracker.core.distanceMeters
+import dev.dublinbustracker.core.Arrival
 import dev.dublinbustracker.core.stopTimesLabel
 import dev.dublinbustracker.core.nextColourIndex
 import dev.dublinbustracker.core.rankRouteSuggestions
@@ -24,8 +25,6 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
-import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -89,8 +88,6 @@ private const val MAX_RADIUS_METERS = 5_000
 
 /** Below this the whole city is a few screens wide and a label per stop would be noise; that is roughly a followed route fitted to the screen. */
 const val STOP_TIMES_MIN_ZOOM = 10.5
-/** How many stops are fetched at once. */
-private const val STOP_TIMES_PARALLEL = 8
 private const val STOP_TIMES_MAX_AGE_MS = 60_000L
 
 class MapViewModel(
@@ -178,7 +175,8 @@ class MapViewModel(
 
     /** Replaces what is being followed with a saved profile: its routes, their colours and the directions that were off. */
     fun loadProfile(profile: RouteProfile) {
-        timesFetchedAt.clear()
+        routeFetchedAt.clear()
+        routeArrivals.clear()
         _tracking.update {
             it.copy(
                 enabled = true,
@@ -204,7 +202,9 @@ class MapViewModel(
     }
 
     private var timesJob: Job? = null
-    private val timesFetchedAt = HashMap<String, Long>()
+    private val routeFetchedAt = HashMap<String, Long>()
+    /** Each followed route's next arrivals, by route then stop id, as last fetched. */
+    private val routeArrivals = HashMap<String, Map<String, List<Arrival>>>()
 
     fun setShowStopTimes(on: Boolean) {
         _tracking.update { it.copy(showStopTimes = on, stopTimes = if (on) it.stopTimes else emptyMap()) }
@@ -213,8 +213,8 @@ class MapViewModel(
 
     /**
      * Keeps the next-arrivals labels for every stop on the followed routes up to date, wherever the map is looking,
-     * so panning and zooming never waits on the network. A stop is only asked again once its times are a minute old
-     * or the routes calling at it have changed; stops nearest the middle of the map go first.
+     * so panning and zooming never waits on the network. One request per route (not per stop) a minute, and the
+     * labels are rebuilt from what was fetched each time so their "min" counts keep ticking down.
      */
     private fun refreshStopTimes(force: Boolean = false) {
         val state = _tracking.value
@@ -223,45 +223,42 @@ class MapViewModel(
             if (state.stopTimes.isNotEmpty()) _tracking.update { it.copy(stopTimes = emptyMap()) }
             return
         }
-        // Each stop with the followed routes that call at it.
-        val stops = state.routes.flatMap { route ->
-            state.stops[route.name].orEmpty()
-                .filterKeys { (route.name to it) !in state.hidden }
-                .values.flatten()
-                .map { it to route.name }
-        }
-            .groupBy({ it.first.id }, { it })
-            .values
-            .map { entries -> entries.first().first to entries.map { it.second }.distinct().sorted() }
-        val ids = stops.map { it.first.id }.toSet()
-        _tracking.update { it.copy(stopTimes = it.stopTimes.filterKeys { id -> id in ids }) }
-
+        rebuildStopTimes()
         val now = System.currentTimeMillis()
-        val centre = lastViewport?.let { LatLon(it.centerLat, it.centerLon) }
-        val due = stops
-            .filter { (stop, routes) -> force || now - (timesFetchedAt["${stop.id}|$routes"] ?: 0L) > STOP_TIMES_MAX_AGE_MS }
-            .let { list -> if (centre == null) list else list.sortedBy { (stop, _) -> distanceMeters(centre, LatLon(stop.lat, stop.lon)) } }
+        val due = state.routes.filter { force || now - (routeFetchedAt[it.name] ?: 0L) > STOP_TIMES_MAX_AGE_MS }
         if (due.isEmpty() || (timesJob?.isActive == true && !force)) return
 
         timesJob?.cancel()
         timesJob = viewModelScope.launch {
-            val gate = Semaphore(STOP_TIMES_PARALLEL)
             coroutineScope {
-                due.forEach { (stop, routes) ->
+                due.forEach { route ->
                     launch {
-                        gate.withPermit {
-                            // A failed fetch keeps the label it has; only an answer replaces it.
-                            val perRoute = runCatching {
-                                routes.map { route -> route to apiClient.arrivals(stop.id, route, limit = 2) }
-                            }.getOrNull() ?: return@launch
-                            val label = stopTimesLabel(perRoute, System.currentTimeMillis() / 1000, ZoneId.systemDefault())
-                            timesFetchedAt["${stop.id}|$routes"] = now
-                            _tracking.update { s -> s.copy(stopTimes = if (label == null) s.stopTimes - stop.id else s.stopTimes + (stop.id to label)) }
-                        }
+                        // A failed fetch keeps the times it has; only an answer replaces them.
+                        val fetched = runCatching { apiClient.routeArrivals(route.name, limit = 2) }.getOrNull() ?: return@launch
+                        routeArrivals[route.name] = fetched
+                        routeFetchedAt[route.name] = now
+                        rebuildStopTimes()
                     }
                 }
             }
         }
+    }
+
+    /** Builds each stop's label from the fetched arrivals of the followed routes calling at it, skipping switched-off directions. */
+    private fun rebuildStopTimes() {
+        val state = _tracking.value
+        val nowSeconds = System.currentTimeMillis() / 1000
+        val routesAt = HashMap<String, MutableSet<String>>()
+        val stopIds = HashSet<String>()
+        state.routes.forEach { route ->
+            state.stops[route.name].orEmpty().filterKeys { (route.name to it) !in state.hidden }.values.flatten().forEach {
+                routesAt.getOrPut(it.id) { sortedSetOf() }.add(route.name)
+            }
+        }
+        val labels = routesAt.mapNotNull { (stopId, routes) ->
+            stopTimesLabel(routes.map { it to routeArrivals[it]?.get(stopId).orEmpty() }, nowSeconds, ZoneId.systemDefault())?.let { stopId to it }
+        }.toMap()
+        _tracking.update { it.copy(stopTimes = labels) }
     }
 
     fun setShowStops(on: Boolean) {
@@ -336,6 +333,9 @@ class MapViewModel(
                 message = null,
             )
         }
+        routeArrivals.remove(name)
+        routeFetchedAt.remove(name)
+        refreshStopTimes()
     }
 
     private suspend fun refreshTrackedBuses() {

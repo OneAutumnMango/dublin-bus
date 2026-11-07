@@ -88,6 +88,22 @@ class TransitApiClientTest {
     }
 
     @Test
+    fun `route arrivals come back by stop from a single request`() = runTest {
+        server.enqueue(
+            MockResponse().setBody(
+                """{"s1":[{"routeShortName":"15","destination":"A","dueMinutes":4,"expectedEpochSeconds":1700}],
+                   "s2":[{"routeShortName":"15","destination":"A","dueMinutes":9,"expectedEpochSeconds":2000}]}""",
+            ),
+        )
+
+        val byStop = client().routeArrivals("15", limit = 2)
+
+        assertEquals(setOf("s1", "s2"), byStop.keys)
+        assertEquals(9, byStop.getValue("s2").single().dueMinutes)
+        assertEquals("/v1/routes/15/arrivals?limit=2", server.takeRequest().path)
+    }
+
+    @Test
     fun `a route filter is only sent when present`() = runTest {
         server.enqueue(MockResponse().setBody("[]"))
         client().arrivals("s1", route = "15", limit = 5)

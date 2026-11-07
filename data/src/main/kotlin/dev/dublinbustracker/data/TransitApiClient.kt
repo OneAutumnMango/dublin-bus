@@ -172,6 +172,12 @@ class TransitApiClient(
             "limit" to limit.toString(),
         ) { body -> json.decodeFromString<List<ArrivalDto>>(body).map { it.toArrival() } }
 
+    /** Arrivals at every stop on [route] in one request, by stop id; stops with nothing coming are absent. */
+    suspend fun routeArrivals(route: String, limit: Int = 2): Map<String, List<Arrival>> =
+        get("v1/routes/${seg(route)}/arrivals", "limit" to limit.toString()) { body ->
+            json.decodeFromString<Map<String, List<ArrivalDto>>>(body).mapValues { (_, arrivals) -> arrivals.map { it.toArrival() } }
+        }
+
     suspend fun routes(query: String = "", limit: Int = 100): List<Route> =
         get("v1/routes", "query" to query, "limit" to limit.toString()) { body ->
             json.decodeFromString<List<RouteDto>>(body).map { Route(it.id, it.shortName, it.longName, it.agencyId) }
