@@ -88,11 +88,7 @@ class BusStopWidget : GlanceAppWidget() {
             // and a refresh (or a just-finished setup) always fetches again.
             val refreshedAt = currentState(REFRESHED_AT)
             var view by remember { mutableStateOf<WidgetView>(WidgetView.Loading) }
-            LaunchedEffect(refreshedAt) {
-                val next = load(context, appWidgetId)
-                // One failed fetch shouldn't wipe good data that's a couple of minutes old.
-                view = if (next is WidgetView.Unreachable && view is WidgetView.Arrivals) view else next
-            }
+            LaunchedEffect(refreshedAt) { view = load(context, appWidgetId) }
             WidgetContent(context, appWidgetId, view)
         }
     }
@@ -114,8 +110,18 @@ suspend fun refreshAllWidgets(context: Context): Int {
 private suspend fun load(context: Context, appWidgetId: Int?): WidgetView {
     val config = appWidgetId?.let { WidgetConfigStore(context).load(it) }
     val container = (context.applicationContext as? BusTrackerApp)?.container
-    return if (config == null || container == null) WidgetView.NotConfigured else resolve(context, container, config)
+    if (config == null || container == null) return WidgetView.NotConfigured
+    val view = resolve(context, container, config)
+    // shortcut: cache lives in memory, so a killed process starts empty; upgrade if that shows up in practice.
+    // One failed fetch shouldn't wipe good data a couple of minutes old; its "Refreshed at" time shows it's stale.
+    return when {
+        view is WidgetView.Arrivals -> view.also { lastGood[appWidgetId] = it }
+        view is WidgetView.Unreachable -> lastGood[appWidgetId] ?: view
+        else -> view
+    }
 }
+
+private val lastGood = java.util.concurrent.ConcurrentHashMap<Int, WidgetView.Arrivals>()
 
 private suspend fun resolve(context: Context, container: AppContainer, config: WidgetConfig): WidgetView {
     val (stopId, title, subtitle) = when (config.mode) {
@@ -177,6 +183,8 @@ private fun WidgetContent(context: Context, appWidgetId: Int?, view: WidgetView)
                             .setData(Uri.parse("widget://$appWidgetId"))
                             .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId),
                     )
+                } else if (view is WidgetView.Unreachable) {
+                    actionRunCallback<RefreshWidgetAction>()
                 } else {
                     actionStartActivity<MainActivity>()
                 },
@@ -185,7 +193,7 @@ private fun WidgetContent(context: Context, appWidgetId: Int?, view: WidgetView)
         when (view) {
             is WidgetView.Loading -> Message("Loading...")
             is WidgetView.NotConfigured -> Message("This widget isn't set up yet. Tap to choose what it shows.")
-            is WidgetView.Unreachable -> Message("Couldn't load buses: ${view.reason ?: "unknown error"}. Tap the widget to open the app.")
+            is WidgetView.Unreachable -> Message("Couldn't load buses: ${view.reason ?: "unknown error"}. Tap to retry.")
             is WidgetView.NoFavourites -> Message("No favourite stops to choose from. Star a stop in the app, or exclude fewer.")
             is WidgetView.NoLocation -> Message("Waiting for your location. Open the app once, or allow location \"all the time\".")
             is WidgetView.Arrivals -> {
