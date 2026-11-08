@@ -288,6 +288,15 @@ class MapViewModel(
         }
     }
 
+    /** The refresh button: everything live on the map, now, in whichever mode it is in. */
+    fun refreshNow() {
+        refresh() // the stops (and nearby buses) in view
+        viewModelScope.launch {
+            if (_tracking.value.enabled && _tracking.value.routes.isNotEmpty()) refreshTrackedBuses()
+            refreshStopTimes(force = true)
+        }
+    }
+
     fun addRoute(input: String) {
         val name = input.trim().uppercase()
         val current = _tracking.value

@@ -458,6 +458,7 @@ fun MapScreen(apiClient: TransitApiClient, mapStartStore: MapStartStore, routePr
             onQueryChanged = viewModel::onRouteQueryChanged,
             onAdd = viewModel::addRoute,
             onRemove = viewModel::removeRoute,
+            onRefresh = viewModel::refreshNow,
             onOptions = { showOptions = true },
         )
 

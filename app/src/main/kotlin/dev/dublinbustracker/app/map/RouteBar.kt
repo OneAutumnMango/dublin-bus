@@ -19,8 +19,8 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
@@ -54,7 +54,8 @@ import dev.dublinbustracker.core.trackingColour
 
 /**
  * The top of the map: a box that suggests routes as you type, the routes being followed (tap a chip's X to drop one),
- * and the button that opens the map's options. Everything else lives in the options sheet.
+ * the button that refreshes what is live on the map, and the one that opens the map's options. (A route is added with the
+ * keyboard's done key or by tapping a suggestion.) Everything else lives in the options sheet.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -64,6 +65,7 @@ fun RouteBar(
     onQueryChanged: (String) -> Unit,
     onAdd: (String) -> Unit,
     onRemove: (String) -> Unit,
+    onRefresh: () -> Unit,
     onOptions: () -> Unit,
 ) {
     var text by remember { mutableStateOf("") }
@@ -105,8 +107,8 @@ fun RouteBar(
                         }
                     }
                 }
-                IconButton(onClick = { add(text) }, enabled = !state.busy, modifier = Modifier.size(40.dp)) {
-                    Icon(Icons.Filled.Add, contentDescription = "Add route")
+                IconButton(onClick = onRefresh, modifier = Modifier.size(40.dp)) {
+                    Icon(Icons.Filled.Refresh, contentDescription = "Refresh the map")
                 }
                 IconButton(onClick = onOptions, modifier = Modifier.size(40.dp)) {
                     Icon(Icons.Filled.Tune, contentDescription = "Map options")
