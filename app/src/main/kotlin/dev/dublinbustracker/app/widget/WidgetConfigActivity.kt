@@ -43,8 +43,10 @@ class WidgetConfigActivity : ComponentActivity() {
     private fun onConfigured(config: WidgetConfig) {
         WidgetConfigStore(this).save(appWidgetId, config)
         lifecycleScope.launch {
-            // The widget may already have drawn itself once, before it was set up, so make it fetch again.
-            runCatching { refreshAllWidgets(this@WidgetConfigActivity) }
+            // The widget may already have drawn itself once, before it was set up: redraw it now, and have a job fetch its data
+            // (here would hold the setup screen open for the network).
+            runCatching { redrawAllWidgets(this@WidgetConfigActivity) }
+            WidgetRefresh.refreshNow(this@WidgetConfigActivity)
             WidgetRefresh.ensureScheduled(this@WidgetConfigActivity)
             setResult(RESULT_OK, Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId))
             finish()

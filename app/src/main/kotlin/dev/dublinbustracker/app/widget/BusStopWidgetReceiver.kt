@@ -18,6 +18,7 @@ class BusStopWidgetReceiver : GlanceAppWidgetReceiver() {
     override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
         super.onUpdate(context, appWidgetManager, appWidgetIds)
         WidgetRefresh.ensureScheduled(context)
+        WidgetRefresh.refreshNow(context) // drawing alone shows what was stored; this gets it current
     }
 
     override fun onDeleted(context: Context, appWidgetIds: IntArray) {

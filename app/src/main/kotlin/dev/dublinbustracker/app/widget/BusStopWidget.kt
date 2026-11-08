@@ -5,11 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
@@ -59,6 +55,7 @@ import dev.dublinbustracker.data.dropRoutes
 import dev.dublinbustracker.data.keepRoutes
 import dev.dublinbustracker.data.nearestFavourite
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withTimeoutOrNull
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 
@@ -73,7 +70,8 @@ sealed interface WidgetView {
     data class Unreachable(val reason: String?) : WidgetView
     data object NoFavourites : WidgetView
     data object NoLocation : WidgetView
-    data class Arrivals(val title: String, val subtitle: String?, val arrivals: List<Arrival>, val refreshedAt: String) : WidgetView
+    /** [stale]: the latest refresh failed, so these are from [refreshedAt] and no newer. */
+    data class Arrivals(val title: String, val subtitle: String?, val arrivals: List<Arrival>, val refreshedAt: String, val stale: Boolean = false) : WidgetView
 }
 
 private val REFRESHED_AT = longPreferencesKey("refreshed_at")
@@ -84,21 +82,40 @@ class BusStopWidget : GlanceAppWidget() {
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val appWidgetId = runCatching { GlanceAppWidgetManager(context).getAppWidgetId(id) }.getOrNull()
         provideContent {
-            // Glance keeps a widget's composition alive for a while, and an update during that time only recomposes it:
-            // it doesn't run provideGlance again. So the data is fetched in here, keyed on a value every refresh changes,
-            // and a refresh (or a just-finished setup) always fetches again.
+            // Drawing only reads what the last refresh stored. The network is never touched in here: nothing keeps the app
+            // alive for a fetch that outlives the broadcast or job that asked for the redraw, and Android freezes it mid-request.
+            // Glance keeps this composition around and only recomposes it on an update, so the key below changes with every refresh.
             val refreshedAt = currentState(REFRESHED_AT)
-            var view by remember { mutableStateOf<WidgetView>(WidgetView.Loading) }
-            LaunchedEffect(refreshedAt) { view = load(context, appWidgetId) }
+            val view = remember(refreshedAt) { shownView(context, appWidgetId) }
             WidgetContent(context, appWidgetId, view)
         }
     }
 }
 
-/** Fetches this widget's data again and redraws it, whether or not it is currently being shown. */
-suspend fun BusStopWidget.refresh(context: Context, glanceId: GlanceId) {
+/**
+ * Fetches this widget's data again, stores it, and redraws, whether or not it is currently being shown. The fetch is
+ * done here, by a caller that keeps the process alive, [budgetMs] being how long a caller with a short window (a tap) can spare.
+ */
+suspend fun BusStopWidget.refresh(context: Context, glanceId: GlanceId, waits: List<Long> = RETRY_WAITS_MS, budgetMs: Long? = null) {
+    val appWidgetId = runCatching { GlanceAppWidgetManager(context).getAppWidgetId(glanceId) }.getOrNull()
+    if (budgetMs == null) {
+        fetchAndStore(context, appWidgetId, waits)
+    } else if (withTimeoutOrNull(budgetMs) { fetchAndStore(context, appWidgetId, waits) } == null) {
+        // Out of time: what is shown stays, and a retry is queued for a moment when the app can have longer.
+        WidgetRefresh.retrySoon(context)
+    }
+    redraw(context, glanceId)
+}
+
+/** Redraws from what is stored, with no network. */
+private suspend fun BusStopWidget.redraw(context: Context, glanceId: GlanceId) {
     updateAppWidgetState(context, glanceId) { it[REFRESHED_AT] = System.currentTimeMillis() }
     update(context, glanceId)
+}
+
+/** Redraws every widget from what is stored, without fetching. */
+suspend fun redrawAllWidgets(context: Context) {
+    GlanceAppWidgetManager(context).getGlanceIds(BusStopWidget::class.java).forEach { BusStopWidget().redraw(context, it) }
 }
 
 /** Refreshes every widget placed on the home screen; returns how many there are. */
@@ -108,28 +125,39 @@ suspend fun refreshAllWidgets(context: Context): Int {
     return ids.size
 }
 
-private suspend fun load(context: Context, appWidgetId: Int?): WidgetView {
-    val config = appWidgetId?.let { WidgetConfigStore(context).load(it) }
-    val container = (context.applicationContext as? BusTrackerApp)?.container
-    if (config == null || container == null) return WidgetView.NotConfigured
+/** What to draw: what the last refresh stored, or "Loading" until there has been one. */
+private fun shownView(context: Context, appWidgetId: Int?): WidgetView {
     val store = WidgetConfigStore(context)
-    val view = resolve(context, container, config)
-    // One failed fetch shouldn't wipe good data (even from before the app was killed); its "Refreshed at" time shows it's stale.
-    return when (view) {
-        is WidgetView.Arrivals -> view.also { store.saveLastGood(appWidgetId, it) }
+    if (appWidgetId == null || store.load(appWidgetId) == null) return WidgetView.NotConfigured
+    return store.loadShown(appWidgetId) ?: WidgetView.Loading
+}
+
+/** The one place the network is used for a widget. Whatever it learns is stored for drawing. */
+private suspend fun fetchAndStore(context: Context, appWidgetId: Int?, waits: List<Long>) {
+    if (appWidgetId == null) return
+    val store = WidgetConfigStore(context)
+    val config = store.load(appWidgetId)
+    val container = (context.applicationContext as? BusTrackerApp)?.container
+    if (config == null || container == null) {
+        store.saveShown(appWidgetId, WidgetView.NotConfigured)
+        return
+    }
+    when (val view = resolve(context, container, config, waits)) {
         is WidgetView.Unreachable -> {
             WidgetRefresh.retrySoon(context)
-            store.loadLastGood(appWidgetId) ?: view
+            // One failed fetch shouldn't wipe good data (even from before the app was killed); "stale" says so on the widget.
+            val previous = store.loadShown(appWidgetId) as? WidgetView.Arrivals
+            store.saveShown(appWidgetId, previous?.copy(stale = true) ?: view)
         }
-        else -> view
+        else -> store.saveShown(appWidgetId, view)
     }
 }
 
-private suspend fun resolve(context: Context, container: AppContainer, config: WidgetConfig): WidgetView {
+private suspend fun resolve(context: Context, container: AppContainer, config: WidgetConfig, waits: List<Long>): WidgetView {
     val (stopId, title, subtitle) = when (config.mode) {
         WidgetMode.SINGLE_STOP -> {
             val id = config.stopId ?: return WidgetView.NotConfigured
-            val stop = retrying { container.apiClient.stop(id) }.getOrElse { return WidgetView.Unreachable(it.message) }
+            val stop = retrying(waits) { container.apiClient.stop(id) }.getOrElse { return WidgetView.Unreachable(it.message) }
             Triple(id, stop.name, subtitleOf(stopNumber(stop.code), config.routes.sorted().joinToString(", ").ifEmpty { null }?.let { "Buses $it" }))
         }
         WidgetMode.NEAREST_FAVOURITE -> {
@@ -144,7 +172,7 @@ private suspend fun resolve(context: Context, container: AppContainer, config: W
             )
         }
     }
-    val arrivals = retrying { container.apiClient.arrivals(stopId, limit = 20) }.getOrElse { return WidgetView.Unreachable(it.message) }
+    val arrivals = retrying(waits) { container.apiClient.arrivals(stopId, limit = 20) }.getOrElse { return WidgetView.Unreachable(it.message) }
     // Buses the user hid for this favourite never show, in either mode.
     val hidden = container.favouritesRepository.favourites.value.firstOrNull { it.id == stopId }?.hiddenRoutes.orEmpty()
     return WidgetView.Arrivals(
@@ -156,9 +184,9 @@ private suspend fun resolve(context: Context, container: AppContainer, config: W
 }
 
 /** A background refresh often runs just as the network is waking up, so a couple of quick retries beat a one-shot failure. */
-private suspend fun <T> retrying(block: suspend () -> T): Result<T> {
+private suspend fun <T> retrying(waits: List<Long>, block: suspend () -> T): Result<T> {
     // A phone that has sat idle can take several seconds to get its network back, so the waits grow.
-    RETRY_WAITS_MS.forEach { wait ->
+    waits.forEach { wait ->
         runCatching { block() }.let { if (it.isSuccess) return it }
         delay(wait)
     }
@@ -226,7 +254,7 @@ private fun WidgetContent(context: Context, appWidgetId: Int?, view: WidgetView)
                 }
                 // A spacer that takes the leftover height puts the footer at the bottom.
                 Spacer(modifier = GlanceModifier.defaultWeight())
-                Text("Refreshed at ${view.refreshedAt}", style = TextStyle(color = MUTED, fontSize = 10.sp))
+                Text(if (view.stale) "Couldn't refresh - last at ${view.refreshedAt}" else "Refreshed at ${view.refreshedAt}", style = TextStyle(color = MUTED, fontSize = 10.sp))
             }
         }
     }
@@ -241,6 +269,7 @@ private fun dueText(arrival: Arrival) = if (arrival.dueMinutes <= 0) "Due" else 
 
 class RefreshWidgetAction : ActionCallback {
     override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
-        BusStopWidget().refresh(context, glanceId)
+        // A tap's broadcast only lives a few seconds, so it tries once more quickly and then leaves the rest to a queued retry.
+        BusStopWidget().refresh(context, glanceId, waits = listOf(1_500L), budgetMs = 9_000L)
     }
 }

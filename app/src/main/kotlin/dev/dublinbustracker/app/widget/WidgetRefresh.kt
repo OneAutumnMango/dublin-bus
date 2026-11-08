@@ -17,6 +17,7 @@ import java.util.concurrent.TimeUnit
 private const val REFRESH_MINUTES = 2L
 private const val WORK_NAME = "widget-poll"
 private const val RETRY_WORK_NAME = "widget-retry"
+private const val NOW_WORK_NAME = "widget-now"
 private const val RETRY_SECONDS = 30L
 
 /** Earlier versions kept a 30-minute periodic job under this name; left alone it would shadow the new polling. */
@@ -30,6 +31,14 @@ object WidgetRefresh {
     }
 
     internal fun scheduleNext(context: Context) = enqueue(context, ExistingWorkPolicy.REPLACE)
+
+    /** A widget needs fresh data (just placed, or the system's slow update came round): fetch in a job, which keeps the app alive for it. */
+    internal fun refreshNow(context: Context) {
+        val request = OneTimeWorkRequestBuilder<WidgetRefreshWorker>()
+            .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+            .build()
+        WorkManager.getInstance(context).enqueueUniqueWork(NOW_WORK_NAME, ExistingWorkPolicy.REPLACE, request)
+    }
 
     /** A refresh just failed: try again in half a minute rather than waiting out the two-minute poll. Doesn't pile up while one is queued. */
     internal fun retrySoon(context: Context) {
