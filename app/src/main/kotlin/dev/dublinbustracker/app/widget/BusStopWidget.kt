@@ -63,6 +63,7 @@ import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 
 private const val SHOWN_ARRIVALS = 4
+private val RETRY_WAITS_MS = listOf(2_000L, 5_000L)
 private val REFRESHED_FORMAT = DateTimeFormatter.ofPattern("HH:mm")
 
 /** What the widget has to say right now. */
@@ -111,17 +112,18 @@ private suspend fun load(context: Context, appWidgetId: Int?): WidgetView {
     val config = appWidgetId?.let { WidgetConfigStore(context).load(it) }
     val container = (context.applicationContext as? BusTrackerApp)?.container
     if (config == null || container == null) return WidgetView.NotConfigured
+    val store = WidgetConfigStore(context)
     val view = resolve(context, container, config)
-    // shortcut: cache lives in memory, so a killed process starts empty; upgrade if that shows up in practice.
-    // One failed fetch shouldn't wipe good data a couple of minutes old; its "Refreshed at" time shows it's stale.
-    return when {
-        view is WidgetView.Arrivals -> view.also { lastGood[appWidgetId] = it }
-        view is WidgetView.Unreachable -> lastGood[appWidgetId] ?: view
+    // One failed fetch shouldn't wipe good data (even from before the app was killed); its "Refreshed at" time shows it's stale.
+    return when (view) {
+        is WidgetView.Arrivals -> view.also { store.saveLastGood(appWidgetId, it) }
+        is WidgetView.Unreachable -> {
+            WidgetRefresh.retrySoon(context)
+            store.loadLastGood(appWidgetId) ?: view
+        }
         else -> view
     }
 }
-
-private val lastGood = java.util.concurrent.ConcurrentHashMap<Int, WidgetView.Arrivals>()
 
 private suspend fun resolve(context: Context, container: AppContainer, config: WidgetConfig): WidgetView {
     val (stopId, title, subtitle) = when (config.mode) {
@@ -155,9 +157,10 @@ private suspend fun resolve(context: Context, container: AppContainer, config: W
 
 /** A background refresh often runs just as the network is waking up, so a couple of quick retries beat a one-shot failure. */
 private suspend fun <T> retrying(block: suspend () -> T): Result<T> {
-    repeat(2) {
+    // A phone that has sat idle can take several seconds to get its network back, so the waits grow.
+    RETRY_WAITS_MS.forEach { wait ->
         runCatching { block() }.let { if (it.isSuccess) return it }
-        delay(1500)
+        delay(wait)
     }
     return runCatching { block() }
 }
