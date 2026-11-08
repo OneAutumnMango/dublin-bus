@@ -142,12 +142,21 @@ fun MapScreen(apiClient: TransitApiClient, mapStartStore: MapStartStore, routePr
         pendingLocationRequest = false
     }
 
+    // The map reports its default view as soon as it exists, before the start position is applied; saving that would overwrite where it was left.
+    val startApplied = remember { java.util.concurrent.atomic.AtomicBoolean(false) }
+
     // Layers are added once per loaded style; the data pushed into them below changes freely.
     LaunchedEffect(handle.style) {
         val style = handle.style ?: return@LaunchedEffect
         val start = mapStartStore.load()
-        val opensAt = if (start.mode == StartMode.CHOSEN) LatLng(start.lat, start.lon) else DUBLIN_CITY_CENTRE
-        handle.map?.cameraPosition = CameraPosition.Builder().target(opensAt).zoom(DEFAULT_ZOOM).build()
+        val left = if (start.mode == StartMode.LAST_POSITION) mapStartStore.lastPosition() else null
+        val opensAt = when {
+            left != null -> LatLng(left.lat, left.lon)
+            start.mode == StartMode.CHOSEN -> LatLng(start.lat, start.lon)
+            else -> DUBLIN_CITY_CENTRE
+        }
+        handle.map?.cameraPosition = CameraPosition.Builder().target(opensAt).zoom(left?.zoom ?: DEFAULT_ZOOM).build()
+        startApplied.set(true)
         if (start.mode == StartMode.MY_LOCATION && hasLocationPermission(context)) {
             // The map shows the city centre until the fix arrives; no fix leaves it there.
             requestCurrentLocation(context) { fix ->
@@ -404,7 +413,10 @@ fun MapScreen(apiClient: TransitApiClient, mapStartStore: MapStartStore, routePr
 
     DisposableEffect(handle.map) {
         val map = handle.map ?: return@DisposableEffect onDispose { }
-        val idleListener = MapLibreMap.OnCameraIdleListener { viewModel.onViewportChanged(map.currentViewport()) }
+        val idleListener = MapLibreMap.OnCameraIdleListener {
+            if (startApplied.get()) map.cameraPosition.let { camera -> camera.target?.let { mapStartStore.saveLastPosition(LastPosition(it.latitude, it.longitude, camera.zoom)) } }
+            viewModel.onViewportChanged(map.currentViewport())
+        }
         val clickListener = MapLibreMap.OnMapClickListener { latLng ->
             val screenPoint = map.projection.toScreenLocation(latLng)
             map.queryRenderedFeatures(screenPoint, TRACK_BUS_LAYER, "track-bus-arrows").firstOrNull()?.getStringProperty("tripId")?.let {

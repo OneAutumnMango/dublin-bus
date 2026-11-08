@@ -46,6 +46,7 @@ fun MapStartSection(store: MapStartStore, onChooseStart: () -> Unit) {
         val options = listOf(
             StartMode.CITY_CENTRE to "Dublin city centre",
             StartMode.MY_LOCATION to "My location (GPS)",
+            StartMode.LAST_POSITION to "Where I left it",
             StartMode.CHOSEN to if (start.mode == StartMode.CHOSEN) "A chosen spot (%.4f, %.4f)".format(start.lat, start.lon) else "A chosen spot",
         )
         androidx.compose.foundation.layout.Column(modifier = Modifier.selectableGroup()) {
