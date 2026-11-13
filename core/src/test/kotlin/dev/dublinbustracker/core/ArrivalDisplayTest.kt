@@ -92,4 +92,21 @@ class ArrivalDisplayTest {
         assertEquals("9 (N/S)", headingsText(listOf(RouteHeading("9", "N/S"))))
         assertEquals("", headingsText(emptyList()))
     }
+
+    @Test
+    fun `display carries hasGps and started`() {
+        val shown = arrival().copy(hasGps = true, started = true).display(now, zone)
+
+        assertTrue(shown.hasGps)
+        assertTrue(shown.started)
+    }
+
+    @Test
+    fun `a timetable-only arrival shows neither`() {
+        val shown = arrival(isRealtime = false).display(now, zone)
+
+        assertFalse(shown.hasGps)
+        assertFalse(shown.started)
+        assertEquals("Due in 17 min · scheduled", shown.detailLine)
+    }
 }

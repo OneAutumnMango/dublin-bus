@@ -15,6 +15,8 @@ data class ArrivalDisplay(
     val detailLine: String,
     /** Greyed out: the bus may already have gone. */
     val muted: Boolean,
+    val hasGps: Boolean = false,
+    val started: Boolean = false,
 )
 
 private val CLOCK_FORMAT = DateTimeFormatter.ofPattern("HH:mm")
@@ -40,6 +42,8 @@ fun Arrival.display(nowEpochSeconds: Long, zone: ZoneId): ArrivalDisplay {
         destination = destination,
         detailLine = details.joinToString(" · "),
         muted = possiblyPassed,
+        hasGps = hasGps,
+        started = started,
     )
 }
 

@@ -18,7 +18,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.GpsFixed
 import androidx.compose.material.icons.filled.Map
+import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.CircularProgressIndicator
@@ -193,7 +195,15 @@ private fun ArrivalRow(arrival: Arrival, onClick: () -> Unit, onViewMap: () -> U
             modifier = Modifier.weight(1f),
         )
         Column(horizontalAlignment = Alignment.End, modifier = Modifier.width(ARRIVAL_TIME_WIDTH).padding(start = 8.dp)) {
-            Text(shown.headline, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (shown.hasGps) {
+                    Icon(Icons.Filled.GpsFixed, "GPS position known", Modifier.size(16.dp), MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                if (shown.started) {
+                    Icon(Icons.Filled.Navigation, "Started its journey", Modifier.size(16.dp), MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Text(shown.headline, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 4.dp))
+            }
             if (shown.detailLine.isNotEmpty()) {
                 Text(
                     shown.detailLine,
