@@ -43,6 +43,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.Dp
@@ -111,7 +113,10 @@ fun RouteBar(
                 }
                 IconButton(onClick = onRefresh, modifier = Modifier.size(40.dp)) {
                     if (refreshing) {
-                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp).semantics { contentDescription = "Refreshing the map" },
+                            strokeWidth = 2.dp,
+                        )
                     } else {
                         Icon(Icons.Filled.Refresh, contentDescription = "Refresh the map")
                     }

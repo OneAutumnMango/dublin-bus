@@ -55,6 +55,8 @@ import dev.dublinbustracker.data.dropRoutes
 import dev.dublinbustracker.data.keepRoutes
 import dev.dublinbustracker.data.nearestFavourite
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.currentCoroutineContext
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 
@@ -175,13 +177,14 @@ private suspend fun resolve(context: Context, container: AppContainer, config: W
 }
 
 /** A background refresh often runs just as the network is waking up, so a couple of quick retries beat a one-shot failure. */
-private suspend fun <T> retrying(waits: List<Long>, block: suspend () -> T): Result<T> {
+internal suspend fun <T> retrying(waits: List<Long>, block: suspend () -> T): Result<T> {
     // A phone that has sat idle can take several seconds to get its network back, so the waits grow.
     waits.forEach { wait ->
         runCatching { block() }.let { if (it.isSuccess) return it }
         delay(wait)
     }
-    return runCatching { block() }
+    // A refresh cancelled mid-request (replaced by a newer one) is not a failed fetch: it must not mark good data stale.
+    return runCatching { block() }.also { currentCoroutineContext().ensureActive() }
 }
 
 private fun stopNumber(code: String): String? = code.takeIf { it.isNotBlank() }?.let { "Stop $it" }

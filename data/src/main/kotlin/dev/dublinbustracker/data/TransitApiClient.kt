@@ -20,6 +20,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import okhttp3.Call
 import okhttp3.Callback
+import okhttp3.Dispatcher
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
@@ -44,6 +45,8 @@ private suspend fun Call.await(): Response = suspendCancellableCoroutine { cont 
 private fun defaultHttpClient(): OkHttpClient =
     OkHttpClient.Builder()
         .callTimeout(20, TimeUnit.SECONDS)
+        // await() goes through the dispatcher, whose default of 5 per host would queue the map's burst of parallel requests.
+        .dispatcher(Dispatcher().apply { maxRequestsPerHost = 16 })
         // The server never redirects, but a login wall in front of it (Cloudflare Access) does when
         // the headers are wrong. Following it would hand back an HTML page and a baffling parse error.
         .followRedirects(false)

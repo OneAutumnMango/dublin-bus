@@ -296,13 +296,14 @@ class MapViewModel(
     /** The refresh button: everything live on the map, now, in whichever mode it is in. */
     fun refreshNow() {
         refresh() // the stops (and nearby buses) in view
-        val stopsLoad = loadJob
         viewModelScope.launch {
             refreshesRunning.update { it + 1 }
             try {
                 if (_tracking.value.enabled && _tracking.value.routes.isNotEmpty()) refreshTrackedBuses()
                 refreshStopTimes(force = true)
-                stopsLoad?.join()
+                timesJob?.join()
+                // Read now, not before: a pan meanwhile replaces the load, and the spinner should wait for that one.
+                loadJob?.join()
             } finally {
                 refreshesRunning.update { it - 1 }
             }
