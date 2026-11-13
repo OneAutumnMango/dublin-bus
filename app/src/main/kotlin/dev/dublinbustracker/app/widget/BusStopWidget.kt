@@ -55,7 +55,6 @@ import dev.dublinbustracker.data.dropRoutes
 import dev.dublinbustracker.data.keepRoutes
 import dev.dublinbustracker.data.nearestFavourite
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.withTimeoutOrNull
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 
@@ -92,18 +91,10 @@ class BusStopWidget : GlanceAppWidget() {
     }
 }
 
-/**
- * Fetches this widget's data again, stores it, and redraws, whether or not it is currently being shown. The fetch is
- * done here, by a caller that keeps the process alive, [budgetMs] being how long a caller with a short window (a tap) can spare.
- */
-suspend fun BusStopWidget.refresh(context: Context, glanceId: GlanceId, waits: List<Long> = RETRY_WAITS_MS, budgetMs: Long? = null) {
+/** Fetches this widget's data again, stores it, and redraws, whether or not it is currently being shown. */
+suspend fun BusStopWidget.refresh(context: Context, glanceId: GlanceId) {
     val appWidgetId = runCatching { GlanceAppWidgetManager(context).getAppWidgetId(glanceId) }.getOrNull()
-    if (budgetMs == null) {
-        fetchAndStore(context, appWidgetId, waits)
-    } else if (withTimeoutOrNull(budgetMs) { fetchAndStore(context, appWidgetId, waits) } == null) {
-        // Out of time: what is shown stays, and a retry is queued for a moment when the app can have longer.
-        WidgetRefresh.retrySoon(context)
-    }
+    fetchAndStore(context, appWidgetId, RETRY_WAITS_MS)
     redraw(context, glanceId)
 }
 
@@ -269,7 +260,7 @@ private fun dueText(arrival: Arrival) = if (arrival.dueMinutes <= 0) "Due" else 
 
 class RefreshWidgetAction : ActionCallback {
     override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
-        // A tap's broadcast only lives a few seconds, so it tries once more quickly and then leaves the rest to a queued retry.
-        BusStopWidget().refresh(context, glanceId, waits = listOf(1_500L), budgetMs = 9_000L)
+        // The tap's broadcast must end within ~10 s or Android declares an ANR and kills the app, so the fetch goes to a job.
+        WidgetRefresh.refreshNow(context)
     }
 }

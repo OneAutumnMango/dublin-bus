@@ -2,7 +2,10 @@ package dev.dublinbustracker.data
 
 import dev.dublinbustracker.core.RouteHeading
 import dev.dublinbustracker.core.TripInfo
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withTimeoutOrNull
+import okhttp3.mockwebserver.SocketPolicy
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import kotlin.test.AfterTest
@@ -21,6 +24,18 @@ class TransitApiClientTest {
 
     private fun client(headers: List<HttpHeader> = listOf(HttpHeader("X-Api-Key", "secret"))) =
         TransitApiClient(settingsProvider = { ServerSettings(server.url("/").toString(), headers) })
+
+    @Test
+    fun `a timeout stops a request the server never answers`() = runBlocking {
+        server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.NO_RESPONSE))
+        val started = System.nanoTime()
+
+        val result = withTimeoutOrNull(500) { client().searchStops("trinity") }
+
+        assertEquals(null, result)
+        // Without cancelling the call this waits out the 20 s callTimeout, which outlasts a widget tap's broadcast.
+        assertTrue((System.nanoTime() - started) / 1_000_000 < 3_000)
+    }
 
     @Test
     fun `stop search hits the v1 endpoint and sends configured headers`() = runTest {

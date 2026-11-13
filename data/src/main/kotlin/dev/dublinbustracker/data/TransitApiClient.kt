@@ -12,15 +12,33 @@ import dev.dublinbustracker.core.TripStopCall
 import dev.dublinbustracker.core.VehicleDetails
 import dev.dublinbustracker.core.VehiclePosition
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import okhttp3.Call
+import okhttp3.Callback
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.Response
+import java.io.IOException
 import java.net.URLEncoder
 import java.util.concurrent.TimeUnit
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
+
+/** Unlike a blocking execute(), this stops the request when the caller's coroutine is cancelled (a timeout, a killed job). */
+private suspend fun Call.await(): Response = suspendCancellableCoroutine { cont ->
+    cont.invokeOnCancellation { cancel() }
+    enqueue(object : Callback {
+        override fun onResponse(call: Call, response: Response) = cont.resume(response) { _, _, _ -> response.close() }
+        override fun onFailure(call: Call, e: IOException) { if (!cont.isCancelled) cont.resumeWithException(e) }
+    })
+}
 
 /** Keeps OkHttp an implementation detail of this module rather than the caller's problem. */
 private fun defaultHttpClient(): OkHttpClient =
@@ -264,8 +282,10 @@ class TransitApiClient(
             settings.headerMap().forEach { (name, value) -> header(name, value) }
         }.build()
 
-        val response = runCatching { httpClient.newCall(request).execute() }
-            .getOrElse { throw TransitApiException("Cannot reach ${base.host}: ${it.message}") }
+        val response = runCatching { httpClient.newCall(request).await() }.getOrElse {
+            currentCoroutineContext().ensureActive() // cancelled by the caller: surface that, not "Cannot reach"
+            throw TransitApiException("Cannot reach ${base.host}: ${it.message}")
+        }
 
         response.use {
             val body = it.body?.string().orEmpty()
