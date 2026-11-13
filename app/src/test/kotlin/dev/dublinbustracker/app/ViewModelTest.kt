@@ -16,11 +16,15 @@ import dev.dublinbustracker.data.ServerSettings
 import dev.dublinbustracker.data.TransitApiClient
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestCoroutineScheduler
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
@@ -215,5 +219,25 @@ class ViewModelTest {
         assertTrue(state.enabled)
         assertEquals(setOf("S8" to "1"), state.hidden)
         assertEquals(profile.copy(name = "Again"), vm.currentProfile("Again"))
+    }
+
+    @Test
+    fun `the map refresh spinner is on while a refresh is pending, through two quick taps, and off when they finish`() {
+        val hold = CountDownLatch(1)
+        val vm = MapViewModel(client { hold.await(5, TimeUnit.SECONDS); "[]" })
+        vm.onViewportChanged(Viewport(53.34, -6.26, 1_000, 53.33, -6.27, 53.35, -6.25))
+        scheduler.advanceTimeBy(1_000)
+        val spinner = AtomicBoolean(false)
+        val job = CoroutineScope(Dispatchers.Unconfined).launch { vm.refreshing.collect { spinner.set(it) } }
+
+        vm.refreshNow()
+        assertTrue(spinner.get(), "on while the request is pending")
+        vm.refreshNow() // the second tap restarts the load; the counter now holds two
+        assertTrue(spinner.get(), "still on after the second tap")
+
+        hold.countDown()
+        waitFor { !spinner.get() }
+        assertFalse(spinner.get())
+        job.cancel()
     }
 }

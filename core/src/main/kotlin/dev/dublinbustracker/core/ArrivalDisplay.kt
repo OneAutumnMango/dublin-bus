@@ -42,8 +42,8 @@ fun Arrival.display(nowEpochSeconds: Long, zone: ZoneId): ArrivalDisplay {
         destination = destination,
         detailLine = details.joinToString(" · "),
         muted = possiblyPassed,
-        hasGps = hasGps,
-        started = started,
+        hasGps = isRealtime && hasGps,
+        started = isRealtime && started && !possiblyPassed,
     )
 }
 

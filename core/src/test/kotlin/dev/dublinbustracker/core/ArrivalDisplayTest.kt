@@ -102,11 +102,20 @@ class ArrivalDisplayTest {
     }
 
     @Test
-    fun `a timetable-only arrival shows neither`() {
-        val shown = arrival(isRealtime = false).display(now, zone)
+    fun `a timetable-only arrival shows neither, even if both flags are set`() {
+        val shown = arrival(isRealtime = false).copy(hasGps = true, started = true).display(now, zone)
 
         assertFalse(shown.hasGps)
         assertFalse(shown.started)
         assertEquals("Due in 17 min · scheduled", shown.detailLine)
+    }
+
+    @Test
+    fun `a possibly passed arrival does not show started but keeps its gps flag`() {
+        val shown = arrival(dueMinutes = 0, expected = now - 300, possiblyPassed = true)
+            .copy(hasGps = true, started = true).display(now, zone)
+
+        assertTrue(shown.hasGps)
+        assertFalse(shown.started)
     }
 }

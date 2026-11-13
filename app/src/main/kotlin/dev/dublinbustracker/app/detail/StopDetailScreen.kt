@@ -197,12 +197,29 @@ private fun ArrivalRow(arrival: Arrival, onClick: () -> Unit, onViewMap: () -> U
         Column(horizontalAlignment = Alignment.End, modifier = Modifier.width(ARRIVAL_TIME_WIDTH).padding(start = 8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (shown.hasGps) {
-                    Icon(Icons.Filled.GpsFixed, "GPS position known", Modifier.size(16.dp), MaterialTheme.colorScheme.onSurfaceVariant)
+                    Icon(
+                        imageVector = Icons.Filled.GpsFixed,
+                        contentDescription = "GPS position known",
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
                 if (shown.started) {
-                    Icon(Icons.Filled.Navigation, "Started its journey", Modifier.size(16.dp), MaterialTheme.colorScheme.onSurfaceVariant)
+                    Icon(
+                        imageVector = Icons.Filled.Navigation,
+                        contentDescription = "Started its journey",
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
-                Text(shown.headline, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 4.dp))
+                Text(
+                    shown.headline,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(start = 4.dp),
+                )
             }
             if (shown.detailLine.isNotEmpty()) {
                 Text(
