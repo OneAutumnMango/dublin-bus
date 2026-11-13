@@ -12,6 +12,7 @@ import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class TransitApiClientTest {
@@ -100,6 +101,26 @@ class TransitApiClientTest {
         assertEquals(120, arrival.delaySeconds)
         assertTrue(arrival.isRealtime)
         assertTrue(arrival.possiblyPassed)
+    }
+
+    @Test
+    fun `arrivals carry the gps and started flags from the server`() = runTest {
+        server.enqueue(MockResponse().setBody("""[{"routeShortName":"15","isRealtime":true,"hasGps":true,"started":true}]"""))
+
+        val arrival = client().arrivals("s1").single()
+
+        assertTrue(arrival.hasGps)
+        assertTrue(arrival.started)
+    }
+
+    @Test
+    fun `arrivals from an older server without the flags parse as false`() = runTest {
+        server.enqueue(MockResponse().setBody("""[{"routeShortName":"15","isRealtime":true}]"""))
+
+        val arrival = client().arrivals("s1").single()
+
+        assertFalse(arrival.hasGps)
+        assertFalse(arrival.started)
     }
 
     @Test

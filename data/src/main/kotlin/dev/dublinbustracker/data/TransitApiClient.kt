@@ -78,6 +78,8 @@ private data class ArrivalDto(
     val delaySeconds: Int? = null,
     val vehicleId: String? = null,
     val possiblyPassed: Boolean = false,
+    val hasGps: Boolean = false,
+    val started: Boolean = false,
 )
 
 @Serializable
@@ -322,6 +324,8 @@ class TransitApiClient(
         delaySeconds = delaySeconds,
         vehicleId = vehicleId,
         possiblyPassed = possiblyPassed,
+        hasGps = hasGps,
+        started = started,
     )
 
     private fun VehicleDto.toVehicle() =

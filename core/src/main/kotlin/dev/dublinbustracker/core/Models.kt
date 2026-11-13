@@ -29,6 +29,10 @@ data class Arrival(
     val vehicleId: String? = null,
     /** Its predicted time has gone by without the feed moving on, so it may already have left. */
     val possiblyPassed: Boolean = false,
+    /** The vehicle has a GPS fix under 3 minutes old. */
+    val hasGps: Boolean = false,
+    /** The vehicle has passed the first stop of its trip. */
+    val started: Boolean = false,
 )
 
 data class Route(
