@@ -116,6 +116,7 @@ fun MapScreen(apiClient: TransitApiClient, mapStartStore: MapStartStore, routePr
     val state by viewModel.uiState.collectAsState()
     val showBuses by viewModel.showBuses.collectAsState()
     val tracking by viewModel.tracking.collectAsState()
+    val refreshing by viewModel.refreshing.collectAsState(false)
     val suggestions by viewModel.suggestions.collectAsState()
     PollWhileVisible(BUS_REFRESH_MS, viewModel::poll)
     val handle = rememberMapHandle()
@@ -458,6 +459,7 @@ fun MapScreen(apiClient: TransitApiClient, mapStartStore: MapStartStore, routePr
             onQueryChanged = viewModel::onRouteQueryChanged,
             onAdd = viewModel::addRoute,
             onRemove = viewModel::removeRoute,
+            refreshing = refreshing,
             onRefresh = viewModel::refreshNow,
             onOptions = { showOptions = true },
         )

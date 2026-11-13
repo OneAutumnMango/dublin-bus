@@ -22,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -65,6 +66,7 @@ fun RouteBar(
     onQueryChanged: (String) -> Unit,
     onAdd: (String) -> Unit,
     onRemove: (String) -> Unit,
+    refreshing: Boolean,
     onRefresh: () -> Unit,
     onOptions: () -> Unit,
 ) {
@@ -108,7 +110,11 @@ fun RouteBar(
                     }
                 }
                 IconButton(onClick = onRefresh, modifier = Modifier.size(40.dp)) {
-                    Icon(Icons.Filled.Refresh, contentDescription = "Refresh the map")
+                    if (refreshing) {
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                    } else {
+                        Icon(Icons.Filled.Refresh, contentDescription = "Refresh the map")
+                    }
                 }
                 IconButton(onClick = onOptions, modifier = Modifier.size(40.dp)) {
                     Icon(Icons.Filled.Tune, contentDescription = "Map options")

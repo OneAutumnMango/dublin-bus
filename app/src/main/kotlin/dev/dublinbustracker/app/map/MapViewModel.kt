@@ -105,6 +105,11 @@ class MapViewModel(
     private val trackedBearings = BearingTracker()
 
     private var loadJob: Job? = null
+
+    // A count, not a flag: a second tap while the first is still waiting must not clear the spinner early.
+    private val refreshesRunning = MutableStateFlow(0)
+    /** True while a tap on the refresh button is still waiting for replies. */
+    val refreshing = refreshesRunning.map { it > 0 }.distinctUntilChanged()
     private var lastViewport: Viewport? = null
 
     private val saved = store.load()
@@ -291,9 +296,16 @@ class MapViewModel(
     /** The refresh button: everything live on the map, now, in whichever mode it is in. */
     fun refreshNow() {
         refresh() // the stops (and nearby buses) in view
+        val stopsLoad = loadJob
         viewModelScope.launch {
-            if (_tracking.value.enabled && _tracking.value.routes.isNotEmpty()) refreshTrackedBuses()
-            refreshStopTimes(force = true)
+            refreshesRunning.update { it + 1 }
+            try {
+                if (_tracking.value.enabled && _tracking.value.routes.isNotEmpty()) refreshTrackedBuses()
+                refreshStopTimes(force = true)
+                stopsLoad?.join()
+            } finally {
+                refreshesRunning.update { it - 1 }
+            }
         }
     }
 
