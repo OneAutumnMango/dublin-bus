@@ -52,7 +52,7 @@ jobs:
           path: |
             ~/.android/avd/*
             ~/.android/adb*
-          key: avd-api34-google_atd-x86_64
+          key: avd-api34-google_atd-x86_64-v1
 
       - name: Create AVD and generate snapshot for caching
         if: steps.avd-cache.outputs.cache-hit != 'true'
@@ -62,7 +62,7 @@ jobs:
           target: google_atd
           arch: x86_64
           force-avd-creation: false
-          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          emulator-options: -no-window -gpu swiftshader_indirect -no-audio -no-boot-anim
           disable-animations: false
           script: echo "Generated AVD snapshot for caching."
 
@@ -80,7 +80,7 @@ jobs:
             mkdir -p appium/artifacts
             adb install -r app/build/outputs/apk/debug/app-debug.apk
             cd appium && APPIUM_HOME=$PWD/.appium nohup npx appium > artifacts/appium.log 2>&1 &
-            for i in $(seq 1 60); do curl -sf -o /dev/null http://127.0.0.1:4723/status && break; sleep 1; done; curl -sf -o /dev/null http://127.0.0.1:4723/status
+            for i in $(seq 1 60); do curl -sf --max-time 2 -o /dev/null http://127.0.0.1:4723/status && break; sleep 1; done; curl -sf --max-time 2 -o /dev/null http://127.0.0.1:4723/status
             cd appium && python -m pytest --reruns 1
 
       - name: Upload artifacts
