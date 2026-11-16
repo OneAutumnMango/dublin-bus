@@ -86,15 +86,15 @@ Fixture contract (field names from the `*Dto`s in `data/.../TransitApiClient.kt`
 - `status.json`: `{"pollIntervalMs":30000,"historyDepth":10,"configuredFeeds":["fake"],"staticData":{"stops":2}}`.
 - Check the real response *shapes* (list vs wrapped object) in `TransitApiClient.kt` lines ~163-215 and match them exactly.
 
-- [ ] **Step 1: Failing tests** in `test_fake_server.py` (start on port 0 via a fixture, use `urllib`):
+- [x] **Step 1: Failing tests** in `test_fake_server.py` (start on port 0 via a fixture, use `urllib`):
   - `test_status_ok`: `GET /v1/status` -> 200 and `configuredFeeds == ["fake"]`.
   - `test_stop_search_filters_by_name`: `GET /v1/stops?query=connell&limit=20` -> the O'Connell stop only; `query=zzz` -> empty result, 200.
   - `test_arrivals_for_stop`: `GET /v1/stops/stop-1/arrivals?limit=20` -> two arrivals, first `tripId == "trip-a"`.
   - `test_unknown_path_404`: `GET /v1/nope` -> 404; `GET /v1/stops/missing/arrivals` -> 404.
-- [ ] **Step 2: Run** `cd appium && python -m pytest test_fake_server.py -q` -> Expected FAIL (module missing).
-- [ ] **Step 3: Implement** `fake_server.py` with `BaseHTTPRequestHandler`, fixtures loaded from `fixtures/` next to the file, `start()` as above. Port 0 must work (tests read `server.server_address[1]`).
-- [ ] **Step 4: Run again** -> Expected: 4 passed.
-- [ ] **Step 5: Commit** `git add appium && git commit -m "Add fake /v1 server for Appium smoke tests"`.
+- [x] **Step 2: Run** `cd appium && python -m pytest test_fake_server.py -q` -> Expected FAIL (module missing).
+- [x] **Step 3: Implement** `fake_server.py` with `BaseHTTPRequestHandler`, fixtures loaded from `fixtures/` next to the file, `start()` as above. Port 0 must work (tests read `server.server_address[1]`).
+- [x] **Step 4: Run again** -> Expected: 4 passed.
+- [x] **Step 5: Commit** `git add appium && git commit -m "Add fake /v1 server for Appium smoke tests"`.
 
 ---
 
