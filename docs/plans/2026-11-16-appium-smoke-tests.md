@@ -54,16 +54,16 @@
 
 **Does NOT cover:** the map screen, widget, or any element not driven by the smoke tests. Tags do not change visible behavior.
 
-- [ ] **Step 1: Create `TestTags.kt`** with the object above (package `dev.dublinbustracker.app.ui`).
-- [ ] **Step 2: Root semantics.** In `AppRoot`'s outermost container in `MainActivity.kt`, apply `Modifier.semantics { testTagsAsResourceId = true }` (needs `@OptIn(ExperimentalComposeUiApi::class)`). It must wrap everything, including the `NavigationBar`.
-- [ ] **Step 3: Apply tags** with `Modifier.testTag(TestTags.X)`: each `NavigationBarItem` (by `AppTab`), the search `OutlinedTextField`, each stop `ListItem` row in search (`stopRow(stop.id)`), each arrival row in `StopDetailScreen` (`arrivalRow(arrival.tripId)`), the `IconButton` inside `FavouriteStarButton`, the settings server-address field and the "Save & test" button.
-- [ ] **Step 4: Build and unit tests still pass.**
+- [x] **Step 1: Create `TestTags.kt`** with the object above (package `dev.dublinbustracker.app.ui`).
+- [x] **Step 2: Root semantics.** In `AppRoot`'s outermost container in `MainActivity.kt`, apply `Modifier.semantics { testTagsAsResourceId = true }` (needs `@OptIn(ExperimentalComposeUiApi::class)`). It must wrap everything, including the `NavigationBar`.
+- [x] **Step 3: Apply tags** with `Modifier.testTag(TestTags.X)`: each `NavigationBarItem` (by `AppTab`), the search `OutlinedTextField`, each stop `ListItem` row in search (`stopRow(stop.id)`), each arrival row in `StopDetailScreen` (`arrivalRow(arrival.tripId)`), the `IconButton` inside `FavouriteStarButton`, the settings server-address field and the "Save & test" button.
+- [x] **Step 4: Build and unit tests still pass.**
   Run: `./gradlew --console=plain :app:assembleDebug test && ./gradlew --stop`
   Expected: BUILD SUCCESSFUL.
-- [ ] **Step 5: Verify tags reach UiAutomator** (the spec's critical risk). With the emulator up (`./scripts/run-emulator.sh`) and the debug APK installed (`./scripts/install-app.sh`):
+- [x] **Step 5: Verify tags reach UiAutomator** (the spec's critical risk). With the emulator up (`./scripts/run-emulator.sh`) and the debug APK installed (`./scripts/install-app.sh`):
   Run: `adb shell uiautomator dump /sdcard/ui.xml && adb pull /sdcard/ui.xml /tmp/ui.xml && grep -o 'resource-id="[^"]*nav_[a-z]*"' /tmp/ui.xml`
   Expected: four `nav_*` ids. If none appear, STOP and report: the plan switches to content-desc/text selectors.
-- [ ] **Step 6: Commit** `git add app && git commit -m "Tag driven UI elements for Appium and expose tags as resource ids"`.
+- [x] **Step 6: Commit** `git add app && git commit -m "Tag driven UI elements for Appium and expose tags as resource ids"`.
 
 ---
 
