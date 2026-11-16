@@ -1,0 +1,12 @@
+{
+  "name": "dublin-bus-appium",
+  "private": true,
+  "engines": { "node": "^22.22.2 || ^24.15.0 || >=26.0.0" },
+  "scripts": {
+    "drivers": "APPIUM_HOME=$PWD/.appium appium driver install uiautomator2@9.2.1",
+    "server": "APPIUM_HOME=$PWD/.appium appium"
+  },
+  "devDependencies": {
+    "appium": "4.0.0"
+  }
+}
