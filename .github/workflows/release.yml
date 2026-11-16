@@ -10,8 +10,11 @@ jobs:
   test:
     uses: ./.github/workflows/test.yml
 
+  appium:
+    uses: ./.github/workflows/appium.yml
+
   apk:
-    needs: test
+    needs: [test, appium]
     runs-on: ubuntu-latest
     permissions:
       contents: write   # create the GitHub release
