@@ -26,7 +26,7 @@ def by_tag(driver, tag, timeout=15):
 
 
 def _boot_completed(_):
-    out = subprocess.run(["adb", "shell", "getprop", "sys.boot_completed"], capture_output=True, text=True)
+    out = subprocess.run(["adb", "shell", "getprop", "sys.boot_completed"], capture_output=True, text=True, timeout=10)
     return out.stdout.strip() == "1"
 
 
@@ -72,7 +72,10 @@ def app(driver):
 @pytest.hookimpl(hookwrapper=True)
 def pytest_runtest_makereport(item, call):
     report = (yield).get_result()
-    drv = item.funcargs.get("driver") or item.funcargs.get("app")
-    if report.when == "call" and report.failed and drv:
-        ARTIFACTS.mkdir(exist_ok=True)
-        drv.save_screenshot(str(ARTIFACTS / f"{item.name}.png"))
+    if report.when == "call" and report.failed:
+        try:
+            drv = item.funcargs.get("driver") or item.funcargs.get("app")
+            ARTIFACTS.mkdir(exist_ok=True)
+            drv.save_screenshot(str(ARTIFACTS / f"{item.name}.png"))
+        except Exception:
+            pass  # a dead Appium session must not mask the real test failure with an INTERNALERROR
