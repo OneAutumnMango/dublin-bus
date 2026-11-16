@@ -1,0 +1,4 @@
+[
+  {"routeShortName":"16","destination":"Ballinteer","dueMinutes":3,"isRealtime":true,"tripId":"trip-a","routeId":"r16","expectedEpochSeconds":1800000000},
+  {"routeShortName":"46A","destination":"Dun Laoghaire","dueMinutes":9,"isRealtime":false,"tripId":"trip-b","routeId":"r46a","expectedEpochSeconds":1800000360}
+]

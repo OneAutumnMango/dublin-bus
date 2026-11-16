@@ -1,0 +1,4 @@
+[
+  {"id":"stop-1","code":"1234","name":"O'Connell Street","lat":53.3498,"lon":-6.2603,"routes":["16","46A"]},
+  {"id":"stop-2","code":"5678","name":"Parnell Square","lat":53.3522,"lon":-6.2639,"routes":["16"]}
+]
