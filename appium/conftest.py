@@ -26,7 +26,10 @@ def by_tag(driver, tag, timeout=15):
 
 
 def _boot_completed(_):
-    out = subprocess.run(["adb", "shell", "getprop", "sys.boot_completed"], capture_output=True, text=True, timeout=10)
+    try:
+        out = subprocess.run(["adb", "shell", "getprop", "sys.boot_completed"], capture_output=True, text=True, timeout=10)
+    except subprocess.TimeoutExpired:
+        return False  # hung adb = not booted yet; keep polling until the wait's deadline
     return out.stdout.strip() == "1"
 
 
