@@ -1,5 +1,7 @@
 package dev.dublinbustracker.app.search
 
+import dev.dublinbustracker.app.ui.TestTags
+import androidx.compose.ui.platform.testTag
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -62,7 +64,7 @@ fun SearchScreen(
             onValueChange = viewModel::onQueryChanged,
             label = { Text("Stop name or number") },
             leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp).testTag(TestTags.SEARCH_FIELD),
             singleLine = true,
         )
 
@@ -131,6 +133,7 @@ internal fun StopRow(
 ) {
     AppListItem(
         onClick = onClick,
+        modifier = Modifier.testTag(TestTags.stopRow(stop.id)),
         headlineContent = { Text(stop.name) },
         supportingContent = {
             val routes = stop.routes.joinToString(", ")

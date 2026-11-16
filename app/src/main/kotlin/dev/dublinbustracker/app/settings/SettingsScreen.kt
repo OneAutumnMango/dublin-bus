@@ -1,5 +1,7 @@
 package dev.dublinbustracker.app.settings
 
+import dev.dublinbustracker.app.ui.TestTags
+import androidx.compose.ui.platform.testTag
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -67,7 +69,7 @@ fun SettingsScreen(
                     autoCorrectEnabled = false,
                     capitalization = KeyboardCapitalization.None,
                 ),
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().testTag(TestTags.SETTINGS_SERVER_ADDRESS),
             )
         }
 
@@ -116,7 +118,7 @@ fun SettingsScreen(
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = { viewModel.save() }) { Text("Save") }
-                OutlinedButton(onClick = viewModel::testConnection) { Text("Save & test") }
+                OutlinedButton(onClick = viewModel::testConnection, modifier = Modifier.testTag(TestTags.SETTINGS_SAVE_TEST)) { Text("Save & test") }
             }
 
             state.savedMessage?.let { Text(it, color = MaterialTheme.colorScheme.primary) }

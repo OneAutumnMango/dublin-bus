@@ -1,5 +1,7 @@
 package dev.dublinbustracker.app.detail
 
+import dev.dublinbustracker.app.ui.TestTags
+import androidx.compose.ui.platform.testTag
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -180,7 +182,7 @@ fun StopDetailScreen(
 private fun ArrivalRow(arrival: Arrival, onClick: () -> Unit, onViewMap: () -> Unit) {
     val shown = arrival.display(System.currentTimeMillis() / 1000, ZoneId.systemDefault())
     // Greyed when the bus may already have gone.
-    AppRow(onClick = onClick, modifier = Modifier.alpha(if (shown.muted) 0.5f else 1f)) {
+    AppRow(onClick = onClick, modifier = Modifier.testTag(TestTags.arrivalRow(arrival.tripId)).alpha(if (shown.muted) 0.5f else 1f)) {
         Text(
             shown.route,
             style = MaterialTheme.typography.titleMedium,

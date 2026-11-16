@@ -1,5 +1,10 @@
 package dev.dublinbustracker.app
 
+import dev.dublinbustracker.app.ui.TestTags
+import androidx.compose.ui.ExperimentalComposeUiApi
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTagsAsResourceId
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -44,6 +49,7 @@ import dev.dublinbustracker.app.settings.SettingsScreen
 import dev.dublinbustracker.core.Arrival
 import dev.dublinbustracker.core.Stop
 
+@OptIn(ExperimentalComposeUiApi::class)
 class MainActivity : ComponentActivity() {
     private val container: AppContainer by lazy { (application as BusTrackerApp).container }
 
@@ -59,7 +65,10 @@ class MainActivity : ComponentActivity() {
             BusTrackerTheme {
                 // The surface fills the whole window, bars included, so no strip of a different colour
                 // shows behind the status bar; only the content inside is padded clear of the bars.
-                Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                Surface(
+                    modifier = Modifier.fillMaxSize().semantics { testTagsAsResourceId = true },
+                    color = MaterialTheme.colorScheme.background,
+                ) {
                     Box(modifier = Modifier.fillMaxSize().safeDrawingPadding()) {
                         AppRoot(container)
                     }
@@ -69,11 +78,11 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private enum class AppTab(val label: String, val icon: ImageVector) {
-    SEARCH("Search", Icons.Filled.Search),
-    MAP("Map", Icons.Filled.Map),
-    FAVOURITES("Favourites", Icons.Filled.Star),
-    SETTINGS("Settings", Icons.Filled.Settings),
+private enum class AppTab(val label: String, val icon: ImageVector, val tag: String) {
+    SEARCH("Search", Icons.Filled.Search, TestTags.NAV_SEARCH),
+    MAP("Map", Icons.Filled.Map, TestTags.NAV_MAP),
+    FAVOURITES("Favourites", Icons.Filled.Star, TestTags.NAV_FAVOURITES),
+    SETTINGS("Settings", Icons.Filled.Settings, TestTags.NAV_SETTINGS),
 }
 
 @Composable
@@ -148,6 +157,7 @@ private fun AppRoot(container: AppContainer) {
             NavigationBar {
                 AppTab.entries.forEach { entry ->
                     NavigationBarItem(
+                        modifier = Modifier.testTag(entry.tag),
                         selected = tab == entry,
                         onClick = { tab = entry },
                         icon = { Icon(entry.icon, contentDescription = null) },
