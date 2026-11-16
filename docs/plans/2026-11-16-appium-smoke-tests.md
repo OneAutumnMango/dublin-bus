@@ -132,13 +132,13 @@ Fixture contract (field names from the `*Dto`s in `data/.../TransitApiClient.kt`
 
 **Does NOT cover:** error states (server down), recents, the "View route on map" action.
 
-- [ ] **Step 1: Write tests** (they fail until the app and fake server cooperate, so run each as written):
+- [x] **Step 1: Write tests** (they fail until the app and fake server cooperate, so run each as written):
   - `test_search_stop_shows_arrivals`: type `connell` into `search_field`; tap `stop_row_stop-1`; assert `arrival_row_trip-a` text contains `Ballinteer` and `arrival_row_trip-b` text contains `Dun Laoghaire`.
   - `test_toggle_favourite_appears_in_favourites`: search `connell`, open the stop, tap `favourite_star` (assert its content-desc changes from "Add to favourites" to "Remove from favourites"); press back; tap `nav_favourites`; assert a row with text `O'Connell Street` exists.
   - `test_settings_save_and_test_reports_success`: tap `nav_settings`; set `settings_server_address` to `http://10.0.2.2:8080/`; tap `settings_save_test`; wait for text matching what `SettingsViewModel.testConnection` reports on success (read it from `settings/SettingsViewModel.kt`; assert on that exact string).
-- [ ] **Step 2: Run** `python -m pytest -q` (from `appium/`, setup as Task 3 step 4) -> Expected: all pass (launch + 3 smoke + fake-server tests).
-- [ ] **Step 3: Flake check:** run the smoke file 3 times in a row; all must pass. If a test needs a wait, add an explicit one — never a sleep.
-- [ ] **Step 4: Commit** `git add appium && git commit -m "Add Appium smoke tests"`.
+- [x] **Step 2: Run** `python -m pytest -q` (from `appium/`, setup as Task 3 step 4) -> Expected: all pass (launch + 3 smoke + fake-server tests).
+- [x] **Step 3: Flake check:** run the smoke file 3 times in a row; all must pass. If a test needs a wait, add an explicit one — never a sleep.
+- [x] **Step 4: Commit** `git add appium && git commit -m "Add Appium smoke tests"`.
 
 ---
 
