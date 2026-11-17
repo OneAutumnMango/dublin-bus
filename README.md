@@ -110,6 +110,11 @@ element, then `by_tag(driver, "tag")` in the test (it matches with `UiSelector.r
 `google_atd` x86_64 emulator with a cached AVD snapshot and `--reruns 1`, and uploads
 `appium-artifacts` (screenshots on failure, Appium log) on every run. Expect about 5 minutes.
 
+GitHub scopes caches made on a tag ref to that tag, so a tag-push run only gets the AVD cache
+(key `avd-api34-google_atd-x86_64-v1`) if the default branch holds it. After merging to main, run
+the Appium workflow once from the Actions tab on main to seed it; otherwise releases run cold
+(about 5 minutes, still pass). Bump the `-v1` suffix in `appium.yml` when the emulator image changes.
+
 - Flaky tag build: re-run the failed `appium` job from the Actions UI; no re-tag needed.
 - If it proves flaky, `continue-on-error: true` on the `appium` job in `release.yml` makes it
   non-blocking.
@@ -125,7 +130,7 @@ element, then `by_tag(driver, "tag")` in the test (it matches with `UiSelector.r
   when the server is unreachable.
 - Stop detail refreshes every 30s. The server only refreshes from NTA every 30–60s, so that is
   the real limit on freshness; polling faster gains nothing but costs the server nothing either.
-- Pushing a tag like `1.2.3` runs `.github/workflows/release.yml`: tests, then one signed APK per CPU (needs repo secrets `KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`).
+- Pushing a tag like `1.2.3` runs `.github/workflows/release.yml`: the unit tests and the Appium smoke tests, then one signed APK per CPU (the `apk` job needs both; signing needs repo secrets `KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`).
 - `./scripts/release-apk.sh <feature-slug>` builds a debug APK into `apks/` (gitignored) for
   manual testing; each feature gets its own APK and commit.
 
