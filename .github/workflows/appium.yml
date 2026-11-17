@@ -1,9 +1,6 @@
 name: Appium
 
 on:
-  # TEMPORARY: lets the branch run before this file exists on main (remove before merge)
-  push:
-    branches: [feat/appium-tests]
   workflow_dispatch:
   workflow_call:
 
