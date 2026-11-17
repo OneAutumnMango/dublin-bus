@@ -1,5 +1,5 @@
 from appium.webdriver.common.appiumby import AppiumBy
-from selenium.common.exceptions import NoSuchElementException, TimeoutException
+from selenium.common.exceptions import NoSuchElementException, TimeoutException, WebDriverException
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
@@ -42,16 +42,19 @@ def test_toggle_favourite_appears_in_favourites(fake_server, app):
 
 def test_settings_save_and_test_reports_success(fake_server, app):
     by_tag(app, "nav_settings").click()
-    field = by_tag(app, "settings_server_address")
     # clear() can silently no-op while Compose is still settling focus (seen once: the URL got typed twice), so poll until the field is empty.
-    def _cleared(_):
+    def _cleared(d):
+        field = by_tag(d, "settings_server_address")  # re-found each poll so a recomposed node can't go stale
         field.click()
         field.clear()
         return "http" not in (field.text or "")
 
     WebDriverWait(app, 15).until(_cleared, "server address field would not clear")
-    field.send_keys("http://10.0.2.2:8080/")
-    app.hide_keyboard()  # the soft keyboard would otherwise cover the button
+    by_tag(app, "settings_server_address").send_keys("http://10.0.2.2:8080/")
+    try:
+        app.hide_keyboard()  # the soft keyboard would otherwise cover the button
+    except WebDriverException:
+        pass  # no soft keyboard shown (hardware-keyboard emulator)
     # The button sits low in a scrolling column; UiAutomator only lists on-screen nodes.
     app.find_element(
         AppiumBy.ANDROID_UIAUTOMATOR,
