@@ -193,10 +193,10 @@ Fixture contract (field names from the `*Dto`s in `data/.../TransitApiClient.kt`
 
 **Security flag:** `none`
 
-- [ ] **Step 1: README section "UI tests (Appium)":** what they cover, `./scripts/appium-test.sh [--headless]`, that it needs port 8080 free and the memory rules, how the CI gate works (runs before `apk` on tag pushes; re-run the failed job from the Actions UI; `workflow_dispatch` for branches), and the `continue-on-error` escape hatch.
-- [ ] **Step 2: `docs/emulator-setup.md`:** a short note that Appium runs add Node + the Appium server on top of the emulator's ~4.3 GB, so run it after `./gradlew --stop`.
-- [ ] **Step 3: Verify every command and flag named in the docs exists** (`grep` the script for each flag).
-- [ ] **Step 4: Commit** `git add README.md docs && git commit -m "Document Appium smoke tests"`.
+- [x] **Step 1: README section "UI tests (Appium)":** what they cover, `./scripts/appium-test.sh [--headless]`, that it needs port 8080 free and the memory rules, how the CI gate works (runs before `apk` on tag pushes; re-run the failed job from the Actions UI; `workflow_dispatch` for branches), and the `continue-on-error` escape hatch.
+- [x] **Step 2: `docs/emulator-setup.md`:** a short note that Appium runs add Node + the Appium server on top of the emulator's ~4.3 GB, so run it after `./gradlew --stop`.
+- [x] **Step 3: Verify every command and flag named in the docs exists** (`grep` the script for each flag).
+- [x] **Step 4: Commit** `git add README.md docs && git commit -m "Document Appium smoke tests"`.
 
 ---
 
