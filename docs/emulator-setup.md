@@ -52,6 +52,13 @@ Working rules that kept it stable after the fix:
   about **4.3GB** in practice - over half this machine's total RAM by itself. Budget for that, not
   for 1536M.
 
+### Appium smoke tests
+
+Appium runs add Node and the Appium server on top of the emulator's ~4.3GB.
+`scripts/appium-test.sh` handles the order (build, `./gradlew --stop`, then boot the emulator), so
+use it rather than starting things by hand, and don't run it alongside the real server container or
+a Gradle build. See the README's "UI tests (Appium)" section.
+
 ### A `pkill` pattern can silently fail to match - verify, don't trust
 
 After renaming the AVD mid-session (`avdmanager move avd --rename`), every later boot command in
