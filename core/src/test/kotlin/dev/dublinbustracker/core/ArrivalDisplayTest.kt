@@ -93,6 +93,12 @@ class ArrivalDisplayTest {
     }
 
     @Test
+    fun `a rail or tram arrival carries its mode, a bus does not`() {
+        assertEquals("tram", arrival().copy(mode = "tram").display(now, zone).mode)
+        assertEquals(null, arrival().display(now, zone).mode)
+    }
+
+    @Test
     fun `a stop's routes read as bus numbers with their direction`() {
         val headings = listOf(RouteHeading("4", "W"), RouteHeading("L25", "W"), RouteHeading("L27", "SW"))
 

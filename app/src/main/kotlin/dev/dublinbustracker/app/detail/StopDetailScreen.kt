@@ -25,6 +25,8 @@ import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Train
+import androidx.compose.material.icons.filled.Tram
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -184,19 +186,39 @@ private fun ArrivalRow(arrival: Arrival, onClick: () -> Unit, onViewMap: () -> U
     val shown = arrival.display(System.currentTimeMillis() / 1000, ZoneId.systemDefault())
     // Greyed when the bus may already have gone.
     AppRow(onClick = onClick, modifier = Modifier.testTag(TestTags.arrivalRow(arrival.tripId)).alpha(if (shown.muted) 0.5f else 1f)) {
-        Text(
-            shown.route,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.width(ARRIVAL_ROUTE_WIDTH),
-        )
-        Text(
-            shown.destination,
-            style = MaterialTheme.typography.bodyMedium,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f),
-        )
+        if (shown.mode == null) {
+            Text(
+                shown.route,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.width(ARRIVAL_ROUTE_WIDTH),
+            )
+            Text(
+                shown.destination,
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+        } else {
+            // Tram and rail routes are named by a long name ("Dublin - Galway"), too wide for the route
+            // column: show an icon there and the name under the destination.
+            Icon(
+                imageVector = if (shown.mode == "tram") Icons.Filled.Tram else Icons.Filled.Train,
+                contentDescription = if (shown.mode == "tram") "Luas" else "Train",
+                modifier = Modifier.width(ARRIVAL_ROUTE_WIDTH).size(24.dp),
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(shown.destination, style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(
+                    shown.route,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
         Column(horizontalAlignment = Alignment.End, modifier = Modifier.width(ARRIVAL_TIME_WIDTH).padding(start = 8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (shown.hasGps) {

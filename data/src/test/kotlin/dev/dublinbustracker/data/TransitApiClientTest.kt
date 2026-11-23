@@ -135,6 +135,16 @@ class TransitApiClientTest {
     }
 
     @Test
+    fun `arrivals carry the tram and rail mode and older servers parse as a bus`() = runTest {
+        server.enqueue(MockResponse().setBody("""[{"routeShortName":"Dublin - Galway","mode":"rail"},{"routeShortName":"15"}]"""))
+
+        val (rail, bus) = client().arrivals("s1")
+
+        assertEquals("rail", rail.mode)
+        assertEquals(null, bus.mode)
+    }
+
+    @Test
     fun `route arrivals come back by stop from a single request`() = runTest {
         server.enqueue(
             MockResponse().setBody(

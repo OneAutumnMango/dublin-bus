@@ -19,6 +19,8 @@ data class ArrivalDisplay(
     val started: Boolean = false,
     /** Shown struck through: the bus is not coming. */
     val cancelled: Boolean = false,
+    /** "tram" or "rail" for Luas and Irish Rail rows (shown with an icon); null for buses. */
+    val mode: String? = null,
 )
 
 private val CLOCK_FORMAT = DateTimeFormatter.ofPattern("HH:mm")
@@ -49,6 +51,7 @@ fun Arrival.display(nowEpochSeconds: Long, zone: ZoneId): ArrivalDisplay {
         hasGps = isRealtime && hasGps && !cancelled,
         started = isRealtime && started && !possiblyPassed && !cancelled,
         cancelled = cancelled,
+        mode = mode,
     )
 }
 

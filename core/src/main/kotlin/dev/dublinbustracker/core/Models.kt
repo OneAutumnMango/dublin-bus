@@ -35,6 +35,8 @@ data class Arrival(
     val started: Boolean = false,
     /** The trip is cancelled or skips this stop; the server only returns these when asked. */
     val cancelled: Boolean = false,
+    /** "tram" (Luas) or "rail" (DART, Irish Rail); null for buses. */
+    val mode: String? = null,
 )
 
 data class Route(
