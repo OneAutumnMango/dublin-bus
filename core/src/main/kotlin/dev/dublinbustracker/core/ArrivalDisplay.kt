@@ -17,6 +17,8 @@ data class ArrivalDisplay(
     val muted: Boolean,
     val hasGps: Boolean = false,
     val started: Boolean = false,
+    /** Shown struck through: the bus is not coming. */
+    val cancelled: Boolean = false,
 )
 
 private val CLOCK_FORMAT = DateTimeFormatter.ofPattern("HH:mm")
@@ -24,6 +26,7 @@ private val CLOCK_FORMAT = DateTimeFormatter.ofPattern("HH:mm")
 fun Arrival.display(nowEpochSeconds: Long, zone: ZoneId): ArrivalDisplay {
     val lateness = delaySeconds?.let(::latenessText)
     val details = when {
+        cancelled -> listOf("Cancelled")
         possiblyPassed -> listOf(
             "May have left",
             "was due ${minutesText(((nowEpochSeconds - expectedEpochSeconds) / 60).toInt().coerceAtLeast(1))} ago",
@@ -33,6 +36,7 @@ fun Arrival.display(nowEpochSeconds: Long, zone: ZoneId): ArrivalDisplay {
     }
     return ArrivalDisplay(
         headline = when {
+            cancelled -> CLOCK_FORMAT.format(Instant.ofEpochSecond(expectedEpochSeconds).atZone(zone))
             possiblyPassed -> "Due"
             !isRealtime -> CLOCK_FORMAT.format(Instant.ofEpochSecond(expectedEpochSeconds).atZone(zone))
             dueMinutes <= 0 -> "Due"
@@ -41,9 +45,10 @@ fun Arrival.display(nowEpochSeconds: Long, zone: ZoneId): ArrivalDisplay {
         route = routeShortName,
         destination = destination,
         detailLine = details.joinToString(" · "),
-        muted = possiblyPassed,
-        hasGps = isRealtime && hasGps,
-        started = isRealtime && started && !possiblyPassed,
+        muted = possiblyPassed || cancelled,
+        hasGps = isRealtime && hasGps && !cancelled,
+        started = isRealtime && started && !possiblyPassed && !cancelled,
+        cancelled = cancelled,
     )
 }
 

@@ -42,6 +42,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -220,6 +221,7 @@ private fun ArrivalRow(arrival: Arrival, onClick: () -> Unit, onViewMap: () -> U
                     fontWeight = FontWeight.Bold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
+                    textDecoration = if (shown.cancelled) TextDecoration.LineThrough else null,
                     modifier = Modifier.padding(start = 4.dp),
                 )
             }

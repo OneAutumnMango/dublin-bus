@@ -80,6 +80,7 @@ private data class ArrivalDto(
     val possiblyPassed: Boolean = false,
     val hasGps: Boolean = false,
     val started: Boolean = false,
+    val cancelled: Boolean = false,
 )
 
 @Serializable
@@ -188,11 +189,12 @@ class TransitApiClient(
     suspend fun stop(stopIdOrCode: String): Stop =
         get("v1/stops/${seg(stopIdOrCode)}") { body -> json.decodeFromString<StopDto>(body).toStop() }
 
-    suspend fun arrivals(stopId: String, route: String? = null, limit: Int = 20): List<Arrival> =
+    suspend fun arrivals(stopId: String, route: String? = null, limit: Int = 20, includeCancelled: Boolean = false): List<Arrival> =
         get(
             "v1/stops/${seg(stopId)}/arrivals",
             "route" to route,
             "limit" to limit.toString(),
+            "includeCancelled" to "true".takeIf { includeCancelled },
         ) { body -> json.decodeFromString<List<ArrivalDto>>(body).map { it.toArrival() } }
 
     /** Arrivals at every stop on [route] in one request, by stop id; stops with nothing coming are absent. */
@@ -326,6 +328,7 @@ class TransitApiClient(
         possiblyPassed = possiblyPassed,
         hasGps = hasGps,
         started = started,
+        cancelled = cancelled,
     )
 
     private fun VehicleDto.toVehicle() =

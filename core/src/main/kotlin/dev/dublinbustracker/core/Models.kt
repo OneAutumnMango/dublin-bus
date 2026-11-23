@@ -33,6 +33,8 @@ data class Arrival(
     val hasGps: Boolean = false,
     /** The vehicle has passed the first stop of its trip. */
     val started: Boolean = false,
+    /** The trip is cancelled or skips this stop; the server only returns these when asked. */
+    val cancelled: Boolean = false,
 )
 
 data class Route(

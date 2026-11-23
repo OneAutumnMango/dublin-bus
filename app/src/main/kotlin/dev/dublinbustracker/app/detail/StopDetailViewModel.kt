@@ -90,10 +90,10 @@ class StopDetailViewModel(
         val routes = _routeFilter.value
         val result = runCatching {
             if (routes.isEmpty()) {
-                apiClient.arrivals(stopId, null)
+                apiClient.arrivals(stopId, null, includeCancelled = true)
             } else {
                 // The server filters on one route at a time, so ask for each chosen one and merge by when they are due.
-                coroutineScope { routes.map { route -> async { apiClient.arrivals(stopId, route) } }.awaitAll() }
+                coroutineScope { routes.map { route -> async { apiClient.arrivals(stopId, route, includeCancelled = true) } }.awaitAll() }
                     .flatten()
                     .sortedBy { it.expectedEpochSeconds }
             }

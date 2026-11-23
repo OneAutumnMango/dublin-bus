@@ -81,6 +81,18 @@ class ArrivalDisplayTest {
     }
 
     @Test
+    fun `a cancelled bus shows its scheduled time, says Cancelled, is muted and drops the gps and started icons`() {
+        val shown = arrival(dueMinutes = 12, isRealtime = false).copy(cancelled = true, hasGps = true, started = true).display(now, zone)
+
+        assertTrue(shown.cancelled)
+        assertTrue(shown.muted)
+        assertEquals("Cancelled", shown.detailLine)
+        assertEquals(java.time.format.DateTimeFormatter.ofPattern("HH:mm").format(java.time.Instant.ofEpochSecond(now + 12 * 60L).atZone(zone)), shown.headline)
+        assertFalse(shown.hasGps)
+        assertFalse(shown.started)
+    }
+
+    @Test
     fun `a stop's routes read as bus numbers with their direction`() {
         val headings = listOf(RouteHeading("4", "W"), RouteHeading("L25", "W"), RouteHeading("L27", "SW"))
 

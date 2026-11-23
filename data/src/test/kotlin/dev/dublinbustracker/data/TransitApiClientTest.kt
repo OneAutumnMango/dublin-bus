@@ -124,6 +124,17 @@ class TransitApiClientTest {
     }
 
     @Test
+    fun `cancelled arrivals parse, and the flag is only requested when asked for`() = runTest {
+        server.enqueue(MockResponse().setBody("""[{"routeShortName":"15","isRealtime":false,"cancelled":true}]"""))
+        server.enqueue(MockResponse().setBody("[]"))
+
+        assertTrue(client().arrivals("s1", includeCancelled = true).single().cancelled)
+        assertTrue(server.takeRequest().path!!.contains("includeCancelled=true"))
+        client().arrivals("s1")
+        assertFalse(server.takeRequest().path!!.contains("includeCancelled"))
+    }
+
+    @Test
     fun `route arrivals come back by stop from a single request`() = runTest {
         server.enqueue(
             MockResponse().setBody(
